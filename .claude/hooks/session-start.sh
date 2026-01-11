@@ -14,6 +14,23 @@ cd "$PROJECT_ROOT"
 PROJECT_NAME=$(basename "$PROJECT_ROOT")
 
 # -----------------------------------------------------------------------------
+# Auto-pull latest changes (conservative approach)
+# Only pulls on main/master, only if working tree is clean, ff-only
+# -----------------------------------------------------------------------------
+if [ -d ".git" ]; then
+    CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
+    if [[ "$CURRENT_BRANCH" == "main" || "$CURRENT_BRANCH" == "master" ]]; then
+        # Check if working tree is clean (no staged or unstaged changes)
+        if git diff --quiet 2>/dev/null && git diff --cached --quiet 2>/dev/null; then
+            # Attempt fast-forward only pull (fails safely if diverged)
+            if git pull --ff-only origin "$CURRENT_BRANCH" 2>/dev/null; then
+                echo "Pulled latest changes from origin/$CURRENT_BRANCH"
+            fi
+        fi
+    fi
+fi
+
+# -----------------------------------------------------------------------------
 # Telemetry Integration (optional - uses Claude Code's OTel config)
 # -----------------------------------------------------------------------------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
