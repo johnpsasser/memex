@@ -18,6 +18,15 @@ MAX_SECTION_LINES=150
 PROJECT_ROOT="{{PROJECT_ROOT}}"
 GLOSSARY_PATH="$PROJECT_ROOT/docs/GLOSSARY.md"
 
+# -----------------------------------------------------------------------------
+# Telemetry Integration (optional - uses Claude Code's OTel config)
+# -----------------------------------------------------------------------------
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$SCRIPT_DIR/telemetry.sh" ]]; then
+    source "$SCRIPT_DIR/telemetry.sh"
+    telemetry_init "post_tool_use"
+fi
+
 # Read the hook input from stdin (JSON format)
 INPUT=$(cat)
 
@@ -27,6 +36,10 @@ FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // .tool_input.path // 
 
 # Exit early if not a docs file modification
 if [ -z "$FILE_PATH" ]; then
+    # Telemetry: finalize for non-file operation
+    if type telemetry_finish &>/dev/null; then
+        telemetry_finish "no_file_path"
+    fi
     exit 0
 fi
 
@@ -37,6 +50,10 @@ case "$FILE_PATH" in
         ;;
     *)
         # Not a docs file, exit silently
+        # Telemetry: finalize for non-docs file
+        if type telemetry_finish &>/dev/null; then
+            telemetry_finish "non_docs_file"
+        fi
         exit 0
         ;;
 esac
@@ -73,6 +90,11 @@ if [ "$SKIP_LINE_CHECK" -eq 0 ] && [ -f "$FILE_PATH" ]; then
         echo "See docs/CONTRIBUTING.md for document size guidelines."
         echo "=============================================="
         echo ""
+
+        # Telemetry: file size warning
+        if type emit_validation_warning &>/dev/null; then
+            emit_validation_warning "file_exceeds_limit" "$REL_PATH" "File has $LINE_COUNT lines (max: $MAX_FILE_LINES)"
+        fi
     fi
 
     # Check for oversized sections
@@ -118,6 +140,11 @@ if [ "$SKIP_LINE_CHECK" -eq 0 ] && [ -f "$FILE_PATH" ]; then
         echo "  - Using anchor links for section-level loading"
         echo "=============================================="
         echo ""
+
+        # Telemetry: section size warning
+        if type emit_validation_warning &>/dev/null; then
+            emit_validation_warning "section_exceeds_limit" "$REL_PATH" "Large sections detected"
+        fi
     fi
 fi
 
@@ -126,6 +153,10 @@ fi
 # =============================================================================
 # Skip reminder for GLOSSARY.md itself
 if [[ "$FILE_PATH" == *"GLOSSARY.md" ]]; then
+    # Telemetry: finalize for glossary edit
+    if type telemetry_finish &>/dev/null; then
+        telemetry_finish "glossary_edit"
+    fi
     exit 0
 fi
 
@@ -145,5 +176,12 @@ echo ""
 echo "Glossary location: docs/GLOSSARY.md"
 echo "=============================================="
 echo ""
+
+# Telemetry: emit doc edited event and finalize
+if type emit_event &>/dev/null; then
+    emit_event "memex.doc.edited" "Documentation file modified" "{\"file.path\":\"$REL_PATH\"}"
+    emit_counter "memex.doc.edits" 1 "{\"file.path\":\"$REL_PATH\"}"
+    telemetry_finish "success"
+fi
 
 exit 0

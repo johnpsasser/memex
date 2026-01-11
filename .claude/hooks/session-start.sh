@@ -13,6 +13,16 @@ cd "$PROJECT_ROOT"
 
 PROJECT_NAME=$(basename "$PROJECT_ROOT")
 
+# -----------------------------------------------------------------------------
+# Telemetry Integration (optional - uses Claude Code's OTel config)
+# -----------------------------------------------------------------------------
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$SCRIPT_DIR/telemetry.sh" ]]; then
+    source "$SCRIPT_DIR/telemetry.sh"
+    telemetry_init "session_start"
+    emit_session_start "$PROJECT_NAME"
+fi
+
 echo "=============================================="
 echo "  $PROJECT_NAME SESSION INITIALIZED"
 echo "=============================================="
@@ -106,5 +116,10 @@ fi
 
 echo "=============================================="
 echo ""
+
+# Telemetry: finalize
+if type telemetry_finish &>/dev/null; then
+    telemetry_finish "success"
+fi
 
 exit 0

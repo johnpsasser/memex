@@ -27,6 +27,15 @@ PROJECT_ROOT="{{PROJECT_ROOT}}"
 DOCS_DIR="$PROJECT_ROOT/docs"
 
 # -----------------------------------------------------------------------------
+# Telemetry Integration (optional - uses Claude Code's OTel config)
+# -----------------------------------------------------------------------------
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$SCRIPT_DIR/telemetry.sh" ]]; then
+    source "$SCRIPT_DIR/telemetry.sh"
+    telemetry_init "user_prompt_submit"
+fi
+
+# -----------------------------------------------------------------------------
 # Configuration
 # -----------------------------------------------------------------------------
 MAX_FILE_LINES=800           # Maximum lines to load from a single file
@@ -111,6 +120,10 @@ add_doc() {
 
     # Skip if already loaded in this session
     if is_already_loaded "$doc"; then
+        # Telemetry: track cache hit (deduplication)
+        if type emit_cache_hit &>/dev/null; then
+            emit_cache_hit "$doc"
+        fi
         return
     fi
 
@@ -201,6 +214,11 @@ esac
 # -----------------------------------------------------------------------------
 MATCHED_DOCS=$(echo "$MATCHED_DOCS" | xargs)  # Trim whitespace
 if [ -z "$MATCHED_DOCS" ]; then
+    # Telemetry: no keywords matched
+    if type emit_no_match &>/dev/null; then
+        emit_no_match
+        telemetry_finish "no_match"
+    fi
     exit 0
 fi
 
@@ -342,6 +360,12 @@ for doc_ref in $MATCHED_DOCS; do
 
         # Mark as loaded for session deduplication
         mark_as_loaded "$doc_ref"
+
+        # Telemetry: track cache miss (doc loaded)
+        if type emit_cache_miss &>/dev/null; then
+            emit_cache_miss "$doc_ref"
+        fi
+
         echo ""
     fi
 done
@@ -350,5 +374,15 @@ echo "</auto-loaded-documentation>"
 echo ""
 echo "<!-- Loaded $DOCS_LOADED docs (~$TOTAL_TOKENS_LOADED tokens). For keyword lookups, see docs/GLOSSARY.md -->"
 echo ""
+
+# -----------------------------------------------------------------------------
+# Telemetry: Emit final metrics
+# -----------------------------------------------------------------------------
+if type emit_docs_loaded &>/dev/null; then
+    emit_docs_loaded "$DOCS_LOADED"
+    emit_tokens_injected "$TOTAL_TOKENS_LOADED"
+    emit_budget_status "$TOTAL_TOKENS_LOADED" "$MAX_TOTAL_TOKENS"
+    telemetry_finish "success"
+fi
 
 exit 0

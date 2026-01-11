@@ -11,6 +11,16 @@ set -e
 PROJECT_ROOT="{{PROJECT_ROOT}}"
 WORKING_DIR="$PROJECT_ROOT/docs/working"
 ARCHIVE_DIR="$HOME/.memex/archives"
+PROJECT_NAME=$(basename "$PROJECT_ROOT")
+
+# -----------------------------------------------------------------------------
+# Telemetry Integration (optional - uses Claude Code's OTel config)
+# -----------------------------------------------------------------------------
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$SCRIPT_DIR/telemetry.sh" ]]; then
+    source "$SCRIPT_DIR/telemetry.sh"
+    telemetry_init "session_end"
+fi
 
 # -----------------------------------------------------------------------------
 # Generate session ID (timestamp-based)
@@ -21,12 +31,22 @@ SESSION_ID="session-$(date +%Y%m%d-%H%M%S)"
 # Check if working directory exists and has content
 # -----------------------------------------------------------------------------
 if [ ! -d "$WORKING_DIR" ]; then
+    # Telemetry: session end with no working dir
+    if type emit_session_end &>/dev/null; then
+        emit_session_end "$PROJECT_NAME" 0
+        telemetry_finish "no_working_dir"
+    fi
     exit 0
 fi
 
 # Check if directory has any files (excluding .git* files)
 FILES=$(ls -A "$WORKING_DIR" 2>/dev/null | grep -v "^\.git")
 if [ -z "$FILES" ]; then
+    # Telemetry: session end with empty working dir
+    if type emit_session_end &>/dev/null; then
+        emit_session_end "$PROJECT_NAME" 0
+        telemetry_finish "empty_working_dir"
+    fi
     exit 0
 fi
 
@@ -78,5 +98,12 @@ fi
 
 echo ""
 echo "Session cleanup complete."
+
+# Telemetry: emit session end metrics
+if type emit_session_end &>/dev/null; then
+    emit_session_end "$PROJECT_NAME" "${FILE_COUNT:-0}"
+    emit_counter "memex.archive.created" 1 "{\"session.id\":\"$SESSION_ID\"}"
+    telemetry_finish "success"
+fi
 
 exit 0

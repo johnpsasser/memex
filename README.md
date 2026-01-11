@@ -128,7 +128,8 @@ memex/
 │       ├── session-end.sh        # Archives working docs
 │       ├── context-enricher.sh   # Auto-injects docs (the main hook)
 │       ├── validate-docs.sh      # Line limit warnings + glossary reminders
-│       └── scan-docs.sh          # Auto-glossary generator utility
+│       ├── scan-docs.sh          # Auto-glossary generator utility
+│       └── telemetry.sh          # OpenTelemetry export helper
 ├── templates/
 │   ├── CLAUDE.md.template        # Master reference template
 │   ├── GLOSSARY.md.template      # Keyword index template
@@ -220,6 +221,84 @@ Avoid:
 **Start small.** You don't need to document everything upfront. Start with CLAUDE.md and GLOSSARY.md, then add specialized docs as your project grows.
 
 **Update the glossary as you go.** The validation hook reminds you, but get in the habit of adding keywords when you add docs.
+
+## OpenTelemetry Support
+
+Memex can export metrics to an OpenTelemetry collector, using the same configuration as Claude Code. When you enable telemetry for Claude Code, Memex automatically starts exporting its own metrics to the same endpoint.
+
+### Enabling Telemetry
+
+Set the same environment variables Claude Code uses:
+
+```bash
+export CLAUDE_CODE_ENABLE_TELEMETRY=1
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+```
+
+That's it. Memex detects these variables and exports metrics via HTTP/JSON to the OTLP endpoint.
+
+### Metrics Exported
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `memex.hook.invocations` | Counter | Hook executions by name and outcome |
+| `memex.hook.duration_ms` | Gauge | Hook execution time in milliseconds |
+| `memex.session.count` | Counter | Sessions started |
+| `memex.docs.loaded` | Counter | Documents loaded into context |
+| `memex.tokens.injected` | Counter | Tokens injected per prompt |
+| `memex.tokens.budget.used` | Gauge | Token budget consumption |
+| `memex.tokens.budget.utilization_percent` | Gauge | Percentage of budget used |
+| `memex.cache.hit` | Counter | Docs skipped (session deduplication) |
+| `memex.cache.miss` | Counter | Docs actually loaded |
+| `memex.prompt.no_match` | Counter | Prompts with no keyword matches |
+| `memex.validation.warning` | Counter | Doc size limit warnings |
+| `memex.doc.edits` | Counter | Documentation file edits |
+| `memex.archive.created` | Counter | Session archives created |
+
+### Events Exported
+
+| Event | Description |
+|-------|-------------|
+| `memex.session.start` | Session started with project name |
+| `memex.session.end` | Session ended with files archived count |
+| `memex.doc.edited` | Documentation file was modified |
+| `memex.validation.warning` | Validation warning details |
+
+### Resource Attributes
+
+All metrics include these resource attributes:
+
+- `service.name`: `memex`
+- `service.version`: `1.0.0`
+- `host.name`: Hostname
+- `os.type`: Operating system
+- `process.pid`: Process ID
+
+### Configuration Options
+
+Memex respects these Claude Code / OpenTelemetry environment variables:
+
+| Variable | Purpose |
+|----------|---------|
+| `CLAUDE_CODE_ENABLE_TELEMETRY` | Enable telemetry (must be `1`) |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | Collector endpoint |
+| `OTEL_EXPORTER_OTLP_HEADERS` | Auth headers (format: `Key=Value,Key2=Value2`) |
+| `OTEL_EXPORTER_OTLP_PROTOCOL` | Protocol (`grpc`, `http/json`, `http/protobuf`) |
+
+### Example: Local Testing
+
+Run a local OpenTelemetry collector with Docker:
+
+```bash
+docker run -p 4318:4318 otel/opentelemetry-collector-contrib:latest
+```
+
+Then enable telemetry:
+
+```bash
+export CLAUDE_CODE_ENABLE_TELEMETRY=1
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+```
 
 ## How This Came About
 
