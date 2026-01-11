@@ -11,9 +11,12 @@ Named after Vannevar Bush's 1945 concept of a "memory extender" - a device that 
 Memex uses Claude Code hooks to:
 
 1. **Auto-inject documentation** - When your prompt contains keywords like "database", "api", or "deploy", the matching docs get loaded into context automatically
-2. **Track session state** - Shows git status and available docs when you start a session
-3. **Remind about updates** - After editing a doc file, reminds you to update the glossary
-4. **Archive working notes** - Cleans up temporary working documents at session end
+2. **Section-level loading** - Load specific sections via anchors (`DATABASE.md#schema`) instead of entire files
+3. **Token budget awareness** - Stops loading docs when approaching context limits (~10k tokens)
+4. **Session deduplication** - Tracks loaded docs per session to avoid re-injecting the same content
+5. **Track session state** - Shows git status and available docs when you start a session
+6. **Validate docs** - Warns when files exceed 800 lines or sections exceed 150 lines
+7. **Archive working notes** - Cleans up temporary working documents at session end
 
 ## Installation
 
@@ -58,15 +61,22 @@ The context-enricher hook is the key piece. It reads your prompt, looks for keyw
 Edit `.claude/hooks/context-enricher.sh` to add your own keyword patterns:
 
 ```bash
-# Add patterns for your project
+# Full file loading
 case "$PROMPT_LOWER" in
     *authentication*|*login*|*oauth*|*jwt*)
         add_doc "features/AUTH.md"
         ;;
 esac
+
+# Section-level loading (more efficient!)
+case "$PROMPT_LOWER" in
+    *"oauth flow"*|*"oauth setup"*)
+        add_doc "features/AUTH.md#oauth-flow"  # Only loads that section
+        ;;
+esac
 ```
 
-The pattern matching is simple: if any of the keywords appear in the prompt (case-insensitive), the doc gets loaded.
+The pattern matching is simple: if any of the keywords appear in the prompt (case-insensitive), the doc gets loaded. With section anchors, only the relevant section is extracted.
 
 ## Documentation Structure
 
@@ -117,13 +127,29 @@ memex/
 │       ├── session-start.sh      # Shows git info at session start
 │       ├── session-end.sh        # Archives working docs
 │       ├── context-enricher.sh   # Auto-injects docs (the main hook)
-│       └── validate-docs.sh      # Reminder after doc edits
+│       ├── validate-docs.sh      # Line limit warnings + glossary reminders
+│       └── scan-docs.sh          # Auto-glossary generator utility
 ├── templates/
 │   ├── CLAUDE.md.template        # Master reference template
 │   ├── GLOSSARY.md.template      # Keyword index template
 │   └── CONTRIBUTING.md.template  # Contribution guide template
 └── examples/
     └── semantic-map.example.md   # Example keyword mappings
+```
+
+### Utility: scan-docs.sh
+
+The `scan-docs.sh` utility helps generate glossary entries:
+
+```bash
+# Scan all docs and suggest keywords
+./scan-docs.sh
+
+# Scan a specific file
+./scan-docs.sh docs/core/API.md
+
+# Check for unmapped documentation
+./scan-docs.sh --check
 ```
 
 ## Requirements
@@ -147,13 +173,15 @@ apt-get install jq
 
 Keep documents small enough to load efficiently but comprehensive enough to be useful.
 
-| Guideline | Target |
-|-----------|--------|
-| Maximum lines | 500 |
-| Optimal range | 200-400 lines |
-| Truncation threshold | 200 lines (by hook) |
+| Level | Max Lines | Target Lines | Rationale |
+|-------|-----------|--------------|-----------|
+| File | 800 | 400-600 | Fits in context with room for conversation |
+| Section | 150 | 50-100 | Section-level loading stays efficient |
+| Index/glossary | 1000 | 500-800 | Keyword indexes are naturally larger |
 
-When a document exceeds 500 lines, split it into sub-documents using the naming convention:
+The `validate-docs.sh` hook warns you when files or sections exceed these limits.
+
+When a document exceeds 800 lines, split it into sub-documents using the naming convention:
 
 ```
 CATEGORY_SUBCATEGORY.md

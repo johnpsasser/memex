@@ -3,11 +3,20 @@
 # PostToolUse Hook - Documentation Validation
 # =============================================================================
 # Triggered after Write or Edit operations on docs/*.md files.
-# Reminds to update GLOSSARY.md when documentation is modified.
-# Does NOT auto-edit - only provides reminders.
+#
+# Features:
+# - Enforces 800-line file limit (warning)
+# - Warns about 150-line section limit (warning)
+# - Reminds to update GLOSSARY.md when new sections are added
+#
+# Does NOT auto-edit - only provides reminders and warnings.
 # =============================================================================
 
+# Configuration
+MAX_FILE_LINES=800
+MAX_SECTION_LINES=150
 PROJECT_ROOT="{{PROJECT_ROOT}}"
+GLOSSARY_PATH="$PROJECT_ROOT/docs/GLOSSARY.md"
 
 # Read the hook input from stdin (JSON format)
 INPUT=$(cat)
@@ -16,7 +25,7 @@ INPUT=$(cat)
 TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
 FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // .tool_input.path // empty' 2>/dev/null)
 
-# Exit early if jq failed or no file path
+# Exit early if not a docs file modification
 if [ -z "$FILE_PATH" ]; then
     exit 0
 fi
@@ -32,47 +41,106 @@ case "$FILE_PATH" in
         ;;
 esac
 
-# Skip if this is the GLOSSARY.md itself
+# Skip line counting for GLOSSARY.md (it's an index, naturally larger)
+SKIP_LINE_CHECK=0
+if [[ "$FILE_PATH" == *"GLOSSARY.md" ]]; then
+    SKIP_LINE_CHECK=1
+fi
+
+# Extract the relative path for cleaner display
+REL_PATH="${FILE_PATH#$PROJECT_ROOT/}"
+
+# =============================================================================
+# Line Count Validation
+# =============================================================================
+if [ "$SKIP_LINE_CHECK" -eq 0 ] && [ -f "$FILE_PATH" ]; then
+    LINE_COUNT=$(wc -l < "$FILE_PATH" | tr -d ' ')
+
+    if [ "$LINE_COUNT" -gt "$MAX_FILE_LINES" ]; then
+        echo ""
+        echo "=============================================="
+        echo "  WARNING: DOCUMENT EXCEEDS LINE LIMIT"
+        echo "=============================================="
+        echo ""
+        echo "File: $REL_PATH"
+        echo "Lines: $LINE_COUNT (maximum: $MAX_FILE_LINES)"
+        echo ""
+        echo "Consider splitting this document into sub-documents:"
+        echo "  - Use naming convention: CATEGORY_SUBCATEGORY.md"
+        echo "  - Example: DATABASE.md -> DATABASE_SCHEMA.md, DATABASE_QUERIES.md"
+        echo "  - Update GLOSSARY.md with new file references"
+        echo ""
+        echo "See docs/CONTRIBUTING.md for document size guidelines."
+        echo "=============================================="
+        echo ""
+    fi
+
+    # Check for oversized sections
+    LARGE_SECTIONS=""
+    current_section=""
+    section_lines=0
+    section_header=""
+
+    while IFS= read -r line; do
+        # Check if this is a header line (## or ###)
+        if [[ "$line" =~ ^(##[#]?)[[:space:]]+(.*) ]]; then
+            # If we were tracking a section, check its size
+            if [ -n "$current_section" ] && [ "$section_lines" -gt "$MAX_SECTION_LINES" ]; then
+                LARGE_SECTIONS="$LARGE_SECTIONS\n  - $section_header ($section_lines lines)"
+            fi
+            # Start tracking new section
+            current_section="$line"
+            section_header="${BASH_REMATCH[2]}"
+            section_lines=1
+        elif [ -n "$current_section" ]; then
+            section_lines=$((section_lines + 1))
+        fi
+    done < "$FILE_PATH"
+
+    # Check the last section
+    if [ -n "$current_section" ] && [ "$section_lines" -gt "$MAX_SECTION_LINES" ]; then
+        LARGE_SECTIONS="$LARGE_SECTIONS\n  - $section_header ($section_lines lines)"
+    fi
+
+    if [ -n "$LARGE_SECTIONS" ]; then
+        echo ""
+        echo "=============================================="
+        echo "  NOTE: LARGE SECTIONS DETECTED"
+        echo "=============================================="
+        echo ""
+        echo "File: $REL_PATH"
+        echo "Sections exceeding $MAX_SECTION_LINES lines:"
+        echo -e "$LARGE_SECTIONS"
+        echo ""
+        echo "Consider:"
+        echo "  - Breaking up large sections into subsections"
+        echo "  - Moving detailed content to separate files"
+        echo "  - Using anchor links for section-level loading"
+        echo "=============================================="
+        echo ""
+    fi
+fi
+
+# =============================================================================
+# Glossary Reminder
+# =============================================================================
+# Skip reminder for GLOSSARY.md itself
 if [[ "$FILE_PATH" == *"GLOSSARY.md" ]]; then
     exit 0
 fi
 
-GLOSSARY_PATH="$PROJECT_ROOT/docs/GLOSSARY.md"
-
-# Only show reminder if GLOSSARY.md exists
-if [ ! -f "$GLOSSARY_PATH" ]; then
-    exit 0
-fi
-
-# -----------------------------------------------------------------------------
-# Reminder about GLOSSARY updates
-# -----------------------------------------------------------------------------
 echo ""
 echo "=============================================="
-echo "  DOCUMENTATION UPDATE REMINDER"
+echo "  DOCUMENTATION VALIDATION REMINDER"
 echo "=============================================="
 echo ""
-echo "File modified: ${FILE_PATH#$PROJECT_ROOT/}"
+echo "File modified: $REL_PATH"
 echo ""
-
-# Extract the relative path for contextual message
-REL_PATH="${FILE_PATH#$PROJECT_ROOT/}"
-
-case "$REL_PATH" in
-    docs/core/*)
-        echo "If you added new system concepts or components,"
-        echo "consider adding them to GLOSSARY.md in the appropriate section."
-        ;;
-    docs/features/*)
-        echo "If you added new feature documentation,"
-        echo "consider adding keywords to GLOSSARY.md for discoverability."
-        ;;
-    docs/*)
-        echo "If you added new sections or concepts,"
-        echo "consider adding relevant keywords to GLOSSARY.md."
-        ;;
-esac
-
+echo "If you added new sections or concepts,"
+echo "consider adding relevant entries to GLOSSARY.md."
+echo ""
+echo "Keyword format:"
+echo "  - **keyword** -> \`path/FILE.md#section\` - Description"
 echo ""
 echo "Glossary location: docs/GLOSSARY.md"
 echo "=============================================="

@@ -113,15 +113,31 @@ Update locations:
 
 Keep documents manageable for efficient loading.
 
-| Limit | Value |
-|-------|-------|
-| Maximum lines per file | 500 |
-| Optimal range | 200-400 lines |
-| Truncation threshold | 200 lines |
+| Level | Max Lines | Target Lines | Rationale |
+|-------|-----------|--------------|-----------|
+| File | 800 | 400-600 | Fits in context with room for conversation |
+| Section | 150 | 50-100 | Section-level loading stays efficient |
+| Index/glossary | 1000 | 500-800 | Keyword indexes are naturally larger |
+
+### Section-Level Loading
+
+The context-enricher hook supports loading specific sections via anchors:
+
+```markdown
+# In GLOSSARY.md:
+- **schema** -> `core/DATABASE.md#table-definitions` - Table structure
+
+# The hook will load only that section, not the full file
+```
+
+**Section best practices:**
+- Keep sections under 150 lines for efficient loading
+- Use descriptive headers that make good anchor names
+- If a section exceeds 150 lines, break it into subsections
 
 ### Splitting Large Documents
 
-When a document grows beyond 500 lines, split it into sub-documents.
+When a document grows beyond 800 lines, split it into sub-documents.
 
 **Naming convention:** `CATEGORY_SUBCATEGORY.md`
 
