@@ -156,10 +156,12 @@ for doc_file in $MATCHED_DOCS; do
         # Output full content for smaller files, or first 200 lines for larger ones
         LINE_COUNT=$(wc -l < "$FULL_PATH" | tr -d ' ')
 
-        if [ "$LINE_COUNT" -le 300 ]; then
+        if [ "$LINE_COUNT" -le 500 ]; then
             cat "$FULL_PATH"
         else
-            head -n 200 "$FULL_PATH"
+            # For large files (>500 lines), extract first 500 lines
+            # Note: Docs should be kept under 500 lines for optimal context loading
+            head -n 500 "$FULL_PATH"
             echo ""
             echo "<!-- Document truncated at 200 lines. Full content: docs/$doc_file -->"
         fi

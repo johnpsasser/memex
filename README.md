@@ -141,15 +141,55 @@ brew install jq
 apt-get install jq
 ```
 
-## Tips
+## Best Practices
 
-**Start small.** You don't need to document everything upfront. Start with CLAUDE.md and GLOSSARY.md, then add specialized docs as your project grows.
+### Document Size Guidelines
+
+Keep documents small enough to load efficiently but comprehensive enough to be useful.
+
+| Guideline | Target |
+|-----------|--------|
+| Maximum lines | 500 |
+| Optimal range | 200-400 lines |
+| Truncation threshold | 200 lines (by hook) |
+
+When a document exceeds 500 lines, split it into sub-documents using the naming convention:
+
+```
+CATEGORY_SUBCATEGORY.md
+```
+
+Examples:
+- `DATABASE_SCHEMA.md`, `DATABASE_QUERIES.md`, `DATABASE_MIGRATIONS.md`
+- `AGENTS_SUPERVISOR.md`, `AGENTS_RESEARCH.md`, `AGENTS_IMPLEMENTATION.md`
+
+### Token Efficiency
+
+AI agents pay for every token loaded. Write docs that get to the point.
+
+| Format | Use For | Why |
+|--------|---------|-----|
+| Tables | Reference data, comparisons | Scannable, compact |
+| Bullet lists | Steps, options, features | Easy to parse |
+| Anchor links | Cross-references | Load sections, not files |
+| Code blocks | Examples, paths | Precise, copy-pasteable |
+
+Avoid:
+- Long paragraphs when a table works
+- Repeating information across files
+- Loading entire files when a section suffices
+
+### Keyword Specificity
 
 **Be specific with keywords.** Instead of matching "test" (too common), match "testing" or "jest" or "vitest".
 
-**Use anchor links.** Point to specific sections like `DATABASE.md#schema` rather than whole files.
+### Anchor Links
 
-**Keep docs under 300 lines.** The hook truncates large files to 200 lines. If a doc is getting long, split it up.
+**Use anchor links.** Point to specific sections like `DATABASE.md#schema` rather than whole files. This lets agents load only what they need.
+
+### Incremental Growth
+
+**Start small.** You don't need to document everything upfront. Start with CLAUDE.md and GLOSSARY.md, then add specialized docs as your project grows.
 
 **Update the glossary as you go.** The validation hook reminds you, but get in the habit of adding keywords when you add docs.
 

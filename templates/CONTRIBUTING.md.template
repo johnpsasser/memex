@@ -109,6 +109,85 @@ Update locations:
 
 ---
 
+## Document Size Limits
+
+Keep documents manageable for efficient loading.
+
+| Limit | Value |
+|-------|-------|
+| Maximum lines per file | 500 |
+| Optimal range | 200-400 lines |
+| Truncation threshold | 200 lines |
+
+### Splitting Large Documents
+
+When a document grows beyond 500 lines, split it into sub-documents.
+
+**Naming convention:** `CATEGORY_SUBCATEGORY.md`
+
+Examples:
+```
+DATABASE.md (overview, links to sub-docs)
+DATABASE_SCHEMA.md (table definitions)
+DATABASE_QUERIES.md (query patterns)
+DATABASE_MIGRATIONS.md (migration procedures)
+```
+
+The parent document becomes a hub that links to sub-documents:
+
+```markdown
+## Database Documentation
+
+- [Schema](DATABASE_SCHEMA.md) - Table definitions and constraints
+- [Queries](DATABASE_QUERIES.md) - Common query patterns
+- [Migrations](DATABASE_MIGRATIONS.md) - Migration procedures
+```
+
+---
+
+## Token Efficiency Guidelines
+
+Every token costs time and context budget. Write docs that maximize information density.
+
+### Prefer Tables Over Paragraphs
+
+Tables are compact and scannable:
+
+```markdown
+# Instead of:
+The database connection pool uses a minimum of 5 connections,
+a maximum of 20 connections, and times out after 30 seconds.
+
+# Use:
+| Setting | Value |
+|---------|-------|
+| Min connections | 5 |
+| Max connections | 20 |
+| Timeout | 30s |
+```
+
+### Use Anchor Links for Cross-References
+
+Link to specific sections rather than entire files:
+
+```markdown
+# Instead of:
+See DATABASE.md for query patterns.
+
+# Use:
+See [Query Patterns](DATABASE.md#queries).
+```
+
+### Avoid Redundancy
+
+Document each concept once in its authoritative location, then reference it elsewhere. If you find yourself copying content, create a single source and link to it.
+
+### Keep Code Examples Minimal
+
+Show only the relevant parts, not full file dumps. Include just enough context to be useful.
+
+---
+
 ## Documentation Patterns
 
 ### Use Markdown Headers for Sections
@@ -120,10 +199,6 @@ Headers automatically create anchor links:
 ### Subsection        -> #subsection
 #### Detail Level     -> #detail-level
 ```
-
-### Keep Code Examples Concise
-
-Show only relevant parts, not full file dumps.
 
 ### Use Tables for Reference Data
 

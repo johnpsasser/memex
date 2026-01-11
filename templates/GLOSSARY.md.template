@@ -33,22 +33,42 @@
 
 Keywords grouped by domain for efficient lookup.
 
+Use dot notation for sub-keywords when you need finer-grained lookups (e.g., `database.schema` vs just `database`).
+
 ### Architecture
 
 - **architecture** -> `docs/core/ARCHITECTURE.md` - System design
+- **architecture.docker** -> `docs/core/ARCHITECTURE.md#docker` - Container setup
+- **architecture.services** -> `docs/core/ARCHITECTURE.md#services` - Service topology
 - **docker** -> `docs/core/ARCHITECTURE.md#docker` - Container setup
 - **infrastructure** -> `docs/core/ARCHITECTURE.md` - Infrastructure details
 
 ### Database
 
 - **database** -> `docs/core/DATABASE.md` - Database overview
+- **database.schema** -> `docs/core/DATABASE.md#schema` - Table definitions
+- **database.constraints** -> `docs/core/DATABASE.md#constraints` - Foreign keys, checks
+- **database.queries** -> `docs/core/DATABASE.md#queries` - Query patterns
+- **database.migrations** -> `docs/core/DATABASE.md#migrations` - Schema changes
 - **schema** -> `docs/core/DATABASE.md#schema` - Table definitions
 - **postgres** -> `docs/core/DATABASE.md` - PostgreSQL configuration
 - **query** -> `docs/core/DATABASE.md#queries` - Query patterns
 
+### Agents
+
+Example sub-keywords for complex domains:
+
+- **agents** -> `docs/agents/AGENTS.md` - Agent system overview
+- **agents.supervisor** -> `docs/agents/AGENTS.md#supervisor` - Supervisor logic
+- **agents.research** -> `docs/agents/AGENTS.md#research` - Research pipeline
+- **agents.implementation** -> `docs/agents/AGENTS.md#implementation` - Implementation pipeline
+- **agents.memory** -> `docs/agents/MEMORY_SYSTEM.md` - Memory and context
+
 ### API
 
 - **api** -> `docs/core/API.md` - API documentation
+- **api.endpoints** -> `docs/core/API.md#endpoints` - Available endpoints
+- **api.auth** -> `docs/core/API.md#authentication` - Auth patterns
 - **endpoint** -> `docs/core/API.md#endpoints` - Available endpoints
 - **route** -> `docs/core/API.md` - Route definitions
 
