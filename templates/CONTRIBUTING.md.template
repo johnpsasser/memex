@@ -1,0 +1,170 @@
+# Contributing to {{PROJECT_NAME}}
+
+> A guide for AI agents and developers working on this project
+
+This document explains how to effectively use the documentation system and contribute changes.
+
+---
+
+## Documentation Philosophy
+
+### Token Efficiency Principle
+
+The documentation system is designed to minimize token usage for AI agents:
+
+- **Keyword-based discovery** - Find what you need without reading everything
+- **Hierarchical loading** - Load only specific sections via anchor links
+- **Cross-referenced** - Navigate between related concepts efficiently
+- **Minimal redundancy** - Each concept documented once, referenced everywhere
+
+### The Three-Tier System
+
+```
+1. GLOSSARY.md (entry point)
+   |-- Keyword index
+   |-- Topic groupings
+   +-- Quick reference tables
+
+2. Specialized Documentation
+   |-- core/          <- Architecture, database, API
+   |-- features/      <- Feature-specific docs
+   +-- operations/    <- Deployment, troubleshooting
+
+3. Master Reference
+   +-- CLAUDE.md      <- Quick instructions for Claude Code
+```
+
+**Rule of Thumb:** Start with GLOSSARY.md, load specific sections, fall back to CLAUDE.md only when needed.
+
+---
+
+## How to Use Documentation
+
+### Step 1: Search the Glossary
+
+Always start here: `docs/GLOSSARY.md`
+
+Example workflow:
+```
+Task: "Fix database query issue"
+
+1. Open GLOSSARY.md
+2. Search for: "query"
+   -> Found: query -> docs/core/DATABASE.md#queries
+3. Load specific section: docs/core/DATABASE.md#queries
+4. Find the relevant query patterns
+```
+
+### Step 2: Load Specific Sections
+
+Use markdown anchor links to jump directly to relevant sections:
+
+```markdown
+# Instead of reading entire file
+Read: DATABASE.md (full file)
+
+# Load specific section only
+Read: DATABASE.md#queries (just that section)
+```
+
+### Step 3: Cross-Reference Properly
+
+When you find information, check cross-references:
+
+```
+Found in CLAUDE.md:
+  "See docs/core/DATABASE.md#queries for details"
+
+Action: Load docs/core/DATABASE.md#queries
+```
+
+---
+
+## When to Update Documentation
+
+### New Features
+
+**Rule:** If you add a feature, update documentation BEFORE committing code.
+
+Required updates:
+
+1. **GLOSSARY.md** - Add keywords for discoverability
+2. **Specialized doc** - Add detailed implementation
+3. **CLAUDE.md** - Update if it affects key files or constraints
+
+### Architecture Changes
+
+**Trigger:** Changes to service topology, data flow, or system boundaries
+
+**Update:** `docs/core/ARCHITECTURE.md` AND affected specialized docs
+
+### API Changes
+
+**Trigger:** New endpoints, changed signatures, deprecated routes
+
+Update locations:
+1. `docs/core/API.md` - Add endpoint documentation
+2. `GLOSSARY.md` - Add keywords
+3. `CLAUDE.md#key-files` - If creates new critical route file
+
+---
+
+## Documentation Patterns
+
+### Use Markdown Headers for Sections
+
+Headers automatically create anchor links:
+
+```markdown
+## Main Section       -> #main-section
+### Subsection        -> #subsection
+#### Detail Level     -> #detail-level
+```
+
+### Keep Code Examples Concise
+
+Show only relevant parts, not full file dumps.
+
+### Use Tables for Reference Data
+
+Tables are easy to scan and consume few tokens.
+
+### Include "Key Files" Sections
+
+Help agents locate relevant code quickly with file paths and line numbers.
+
+---
+
+## Git Workflow
+
+### Commit Messages
+
+Follow conventional commits:
+
+```
+feat: Add new feature
+fix: Fix bug
+docs: Update documentation
+refactor: Restructure code
+test: Add tests
+```
+
+### Pre-Commit Checklist
+
+- [ ] Code compiles
+- [ ] Tests pass
+- [ ] Documentation updated (GLOSSARY.md + specialized docs)
+- [ ] No console.log left in production code
+
+---
+
+## Summary
+
+1. **Start with GLOSSARY.md** for keyword lookup
+2. **Load specific sections** via anchor links
+3. **Update docs as you code** - not after
+4. **Follow established patterns** in existing docs
+
+---
+
+**Last Updated:** {{DATE}}

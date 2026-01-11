@@ -1,0 +1,51 @@
+# CLAUDE.md
+
+Quick instructions for Claude Code. For keyword lookups, see `docs/GLOSSARY.md`.
+
+## Quick Start
+
+1. **Keyword lookup**: `docs/GLOSSARY.md`
+2. **Contribution guidelines**: `docs/CONTRIBUTING.md`
+3. **Load docs as needed** - see Documentation Map below
+
+## Development Commands
+
+| Task | Command |
+|------|---------|
+| Install dependencies | `npm install` |
+| Run development | `npm run dev` |
+| Run tests | `npm test` |
+| Build | `npm run build` |
+| Type check | `npm run typecheck` |
+
+## Key Files
+
+| Path | Purpose |
+|------|---------|
+| `src/index.ts` | Main entry point |
+| `src/config.ts` | Configuration |
+| `package.json` | Project manifest |
+
+## Critical Constraints
+
+1. **Constraint 1**: Description here
+2. **Constraint 2**: Description here
+3. **Constraint 3**: Description here
+
+## Documentation Map
+
+| Folder | Contents |
+|--------|----------|
+| `docs/core/` | Architecture, database, API documentation |
+| `docs/features/` | Feature-specific documentation |
+| `docs/` | GLOSSARY.md, CONTRIBUTING.md |
+
+## Quick References
+
+- **Architecture**: see `docs/core/ARCHITECTURE.md`
+- **Database**: see `docs/core/DATABASE.md`
+- **API patterns**: see `docs/core/API.md`
+
+---
+
+For detailed information, search `docs/GLOSSARY.md` or load the relevant doc file.

@@ -1,0 +1,105 @@
+# {{PROJECT_NAME}} Documentation Glossary
+
+> LLM-optimized keyword-to-file mapping for AI agents.
+> Use this file first to locate relevant documentation without loading everything.
+
+**Last Updated:** {{DATE}}
+
+---
+
+## How to Use This Glossary
+
+1. **Quick Lookup:** Search for keywords related to your task
+2. **Find Files:** Use the Quick Reference Table to identify relevant docs
+3. **Navigate Sections:** Use anchor links to jump directly to sections
+4. **Load Selectively:** Only load the specific files and sections you need
+
+**Format:** `keyword` -> `FILENAME.md#section` - Brief description
+
+---
+
+## Quick Reference Table
+
+| File | Lines | Primary Topics |
+|------|-------|----------------|
+| `docs/core/ARCHITECTURE.md` | - | system, docker, containers |
+| `docs/core/DATABASE.md` | - | schema, postgres, queries |
+| `docs/core/API.md` | - | endpoints, routes, REST |
+| `docs/CONTRIBUTING.md` | - | guidelines, patterns |
+
+---
+
+## Semantic Clusters
+
+Keywords grouped by domain for efficient lookup.
+
+### Architecture
+
+- **architecture** -> `docs/core/ARCHITECTURE.md` - System design
+- **docker** -> `docs/core/ARCHITECTURE.md#docker` - Container setup
+- **infrastructure** -> `docs/core/ARCHITECTURE.md` - Infrastructure details
+
+### Database
+
+- **database** -> `docs/core/DATABASE.md` - Database overview
+- **schema** -> `docs/core/DATABASE.md#schema` - Table definitions
+- **postgres** -> `docs/core/DATABASE.md` - PostgreSQL configuration
+- **query** -> `docs/core/DATABASE.md#queries` - Query patterns
+
+### API
+
+- **api** -> `docs/core/API.md` - API documentation
+- **endpoint** -> `docs/core/API.md#endpoints` - Available endpoints
+- **route** -> `docs/core/API.md` - Route definitions
+
+### Configuration
+
+- **config** -> `CLAUDE.md#configuration` - Configuration options
+- **environment** -> `docs/core/ARCHITECTURE.md#environment` - Env variables
+
+---
+
+## File Index
+
+Section-level navigation for each documentation file.
+
+### docs/core/ARCHITECTURE.md
+- `#overview` - System overview
+- `#docker` - Docker configuration
+- `#components` - System components
+
+### docs/core/DATABASE.md
+- `#schema` - Database schema
+- `#tables` - Table definitions
+- `#queries` - Query patterns
+
+### docs/core/API.md
+- `#endpoints` - API endpoints
+- `#authentication` - Auth patterns
+- `#errors` - Error handling
+
+---
+
+## Alphabetical Keyword Index
+
+| Keyword | Target |
+|---------|--------|
+| api | `docs/core/API.md` |
+| architecture | `docs/core/ARCHITECTURE.md` |
+| database | `docs/core/DATABASE.md` |
+| docker | `docs/core/ARCHITECTURE.md#docker` |
+| endpoint | `docs/core/API.md#endpoints` |
+| query | `docs/core/DATABASE.md#queries` |
+| schema | `docs/core/DATABASE.md#schema` |
+
+---
+
+## Documentation Principles
+
+1. **Token Efficiency** - Use this glossary first, load specific sections as needed
+2. **LLM-Optimized** - Keyword-based search, anchor links for direct access
+3. **Cross-Referenced** - All concepts link to authoritative documentation
+
+---
+
+**Last Updated:** {{DATE}}
