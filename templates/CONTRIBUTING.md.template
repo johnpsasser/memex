@@ -82,6 +82,25 @@ Action: Load docs/core/DATABASE.md#queries
 
 ## When to Update Documentation
 
+### Update Existing Content First
+
+**Prefer updating existing sections over adding new ones.** New sections that cover similar ground leave old content stale and create confusion.
+
+| Scenario | Action |
+|----------|--------|
+| Feature enhancement | Update the existing feature's section |
+| Bug fix with behavior change | Update the existing behavior documentation |
+| API parameter added | Update the existing endpoint documentation |
+| **Net-new feature** | Create new section (only if truly new) |
+| **Net-new component** | Create new file (only if distinct system) |
+
+**Signs you should update instead of add:**
+- Existing section covers the same component/feature
+- Adding would duplicate context or background
+- Old section would become misleading if left unchanged
+
+**When updating, fully replace outdated content** rather than appending "UPDATE:" notes or version disclaimers. The documentation should read as current truth, not a changelog.
+
 ### New Features
 
 **Rule:** If you add a feature, update documentation BEFORE committing code.
