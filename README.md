@@ -130,6 +130,9 @@ memex/
 │       ├── validate-docs.sh      # Line limit warnings + glossary reminders
 │       ├── scan-docs.sh          # Auto-glossary generator utility
 │       └── telemetry.sh          # OpenTelemetry export helper
+├── skills/
+│   └── memex-docs/
+│       └── SKILL.md              # Documentation writing guidelines skill
 ├── templates/
 │   ├── CLAUDE.md.template        # Master reference template
 │   ├── GLOSSARY.md.template      # Keyword index template
@@ -152,6 +155,17 @@ The `scan-docs.sh` utility helps generate glossary entries:
 # Check for unmapped documentation
 ./scan-docs.sh --check
 ```
+
+### Skill: memex-docs
+
+The `memex-docs` skill provides documentation writing guidelines that Claude loads on-demand when editing files in `docs/`. It includes:
+
+- Size limits (800 lines/file, 150 lines/section)
+- Token efficiency patterns (tables over paragraphs, anchor links)
+- Update vs. add decision guidance
+- GLOSSARY.md formatting rules
+
+The skill loads automatically when Claude detects documentation work, keeping guidelines out of context until needed.
 
 ## Requirements
 

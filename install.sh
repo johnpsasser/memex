@@ -135,7 +135,8 @@ fi
 # -----------------------------------------------------------------------------
 echo "Installing hooks..."
 
-for hook in session-start.sh session-end.sh context-enricher.sh validate-docs.sh; do
+# Copy each hook and update PROJECT_ROOT
+for hook in session-start.sh session-end.sh context-enricher.sh validate-docs.sh scan-docs.sh; do
     if [ -f "$SCRIPT_DIR/.claude/hooks/$hook" ]; then
         cp "$SCRIPT_DIR/.claude/hooks/$hook" "$PROJECT_ROOT/.claude/hooks/$hook"
 
@@ -151,11 +152,11 @@ for hook in session-start.sh session-end.sh context-enricher.sh validate-docs.sh
     fi
 done
 
-# Copy telemetry helper
+# Copy telemetry helper (sourced by other hooks, no PROJECT_ROOT needed)
 if [ -f "$SCRIPT_DIR/.claude/hooks/telemetry.sh" ]; then
     cp "$SCRIPT_DIR/.claude/hooks/telemetry.sh" "$PROJECT_ROOT/.claude/hooks/telemetry.sh"
     chmod +x "$PROJECT_ROOT/.claude/hooks/telemetry.sh"
-    echo -e "  ${GREEN}+${NC} telemetry.sh (helper)"
+    echo -e "  ${GREEN}+${NC} telemetry.sh"
 fi
 
 # -----------------------------------------------------------------------------
@@ -331,6 +332,20 @@ if [ -f "$SCRIPT_DIR/templates/CONTRIBUTING.md.template" ]; then
     sed "s/{{PROJECT_NAME}}/$PROJECT_NAME/g" \
         "$SCRIPT_DIR/templates/CONTRIBUTING.md.template" > "$CONTRIBUTING_FILE"
     echo -e "  ${GREEN}+${NC} docs/CONTRIBUTING.md"
+fi
+
+# -----------------------------------------------------------------------------
+# Install skills
+# -----------------------------------------------------------------------------
+echo "Installing skills..."
+
+# Create skills directory
+mkdir -p "$PROJECT_ROOT/.claude/skills"
+
+# memex-docs skill
+if [ -d "$SCRIPT_DIR/skills/memex-docs" ]; then
+    cp -r "$SCRIPT_DIR/skills/memex-docs" "$PROJECT_ROOT/.claude/skills/"
+    echo -e "  ${GREEN}+${NC} memex-docs skill"
 fi
 
 # -----------------------------------------------------------------------------
