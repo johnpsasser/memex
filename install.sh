@@ -92,6 +92,32 @@ for hook in session-start.sh session-end.sh context-enricher.sh validate-docs.sh
     fi
 done
 
+# Copy telemetry helper (sourced by other hooks, not a standalone hook)
+if [ -f "$SCRIPT_DIR/.claude/hooks/telemetry.sh" ]; then
+    cp "$SCRIPT_DIR/.claude/hooks/telemetry.sh" "$PROJECT_ROOT/.claude/hooks/telemetry.sh"
+    chmod +x "$PROJECT_ROOT/.claude/hooks/telemetry.sh"
+    echo -e "  ${GREEN}+${NC} telemetry.sh (helper)"
+fi
+
+# -----------------------------------------------------------------------------
+# Copy skills
+# -----------------------------------------------------------------------------
+echo "Installing skills..."
+
+if [ -d "$SCRIPT_DIR/.claude/skills" ]; then
+    # Copy each skill directory
+    for skill_dir in "$SCRIPT_DIR/.claude/skills"/*/; do
+        if [ -d "$skill_dir" ]; then
+            skill_name=$(basename "$skill_dir")
+            mkdir -p "$PROJECT_ROOT/.claude/skills/$skill_name"
+            cp -r "$skill_dir"* "$PROJECT_ROOT/.claude/skills/$skill_name/" 2>/dev/null || true
+            echo -e "  ${GREEN}+${NC} $skill_name"
+        fi
+    done
+else
+    echo -e "  ${YELLOW}~${NC} No skills to install"
+fi
+
 # -----------------------------------------------------------------------------
 # Create settings.json with correct paths
 # -----------------------------------------------------------------------------
