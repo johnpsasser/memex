@@ -3,7 +3,19 @@
 # Memex Installer
 # =============================================================================
 # Sets up the context-aware documentation system for Claude Code.
-# Run this script from your project root.
+#
+# Installation targets:
+#   - Claude Code config (hooks, settings, skills) -> PROJECT_ROOT/.claude/
+#   - CLAUDE.md -> PROJECT_ROOT/CLAUDE.md
+#   - Documentation templates -> WORKTREE/docs/ (git worktree)
+#
+# Behavior for existing files:
+#   - CLAUDE.md: Append memex section (idempotent - won't duplicate)
+#   - GLOSSARY.md: Backup to .old, install latest
+#   - CONTRIBUTING.md: Backup to .old, install latest
+#   - Hooks: Always overwrite with latest
+#   - settings.json: Merge hooks (preserve other settings)
+#   - Skills: Add new skills, preserve existing customizations
 # =============================================================================
 
 set -e
@@ -15,6 +27,9 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Memex marker for idempotent CLAUDE.md append
+MEMEX_MARKER="<!-- MEMEX:AUTO-GENERATED -->"
+
 echo ""
 echo -e "${BLUE}========================================${NC}"
 echo -e "${BLUE}  Memex - Documentation Memory System${NC}"
@@ -22,28 +37,68 @@ echo -e "${BLUE}========================================${NC}"
 echo ""
 
 # -----------------------------------------------------------------------------
-# Detect project root
+# Parse arguments
 # -----------------------------------------------------------------------------
-if [ -n "$1" ]; then
-    PROJECT_ROOT="$1"
-else
+PROJECT_ROOT=""
+WORKTREE=""
+FORCE_MODE=0
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -f|--force)
+            FORCE_MODE=1
+            shift
+            ;;
+        -w|--worktree)
+            WORKTREE="$2"
+            shift 2
+            ;;
+        *)
+            if [ -z "$PROJECT_ROOT" ]; then
+                PROJECT_ROOT="$1"
+            fi
+            shift
+            ;;
+    esac
+done
+
+# Default PROJECT_ROOT to current directory
+if [ -z "$PROJECT_ROOT" ]; then
     PROJECT_ROOT="$(pwd)"
 fi
 
 # Expand to absolute path
 PROJECT_ROOT="$(cd "$PROJECT_ROOT" && pwd)"
 
-echo -e "Installing to: ${GREEN}$PROJECT_ROOT${NC}"
+# -----------------------------------------------------------------------------
+# Detect worktree (git repository root)
+# -----------------------------------------------------------------------------
+if [ -z "$WORKTREE" ]; then
+    # Try to find git worktree
+    if [ -d "$PROJECT_ROOT/.git" ] || [ -f "$PROJECT_ROOT/.git" ]; then
+        WORKTREE="$PROJECT_ROOT"
+    elif command -v git &> /dev/null; then
+        WORKTREE=$(cd "$PROJECT_ROOT" && git rev-parse --show-toplevel 2>/dev/null) || WORKTREE="$PROJECT_ROOT"
+    else
+        WORKTREE="$PROJECT_ROOT"
+    fi
+fi
+
+# Expand worktree to absolute path
+WORKTREE="$(cd "$WORKTREE" 2>/dev/null && pwd)" || WORKTREE="$PROJECT_ROOT"
+
+echo -e "Claude config:  ${GREEN}$PROJECT_ROOT${NC}"
+echo -e "Git worktree:   ${GREEN}$WORKTREE${NC}"
 echo ""
 
 # -----------------------------------------------------------------------------
-# Check for existing .claude directory
+# Check for existing .claude directory (interactive mode only)
 # -----------------------------------------------------------------------------
-if [ -d "$PROJECT_ROOT/.claude" ]; then
-    echo -e "${YELLOW}Warning: .claude directory already exists.${NC}"
-    read -p "Overwrite hooks? (y/N) " -n 1 -r
+if [ -d "$PROJECT_ROOT/.claude" ] && [ "$FORCE_MODE" -eq 0 ] && [ -t 0 ]; then
+    echo -e "${YELLOW}Note: .claude directory already exists. Hooks will be updated.${NC}"
+    read -p "Continue? (Y/n) " -n 1 -r
     echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    if [[ $REPLY =~ ^[Nn]$ ]]; then
         echo "Installation cancelled."
         exit 0
     fi
@@ -59,40 +114,44 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # -----------------------------------------------------------------------------
 echo "Creating directories..."
 mkdir -p "$PROJECT_ROOT/.claude/hooks"
-mkdir -p "$PROJECT_ROOT/docs/core"
-mkdir -p "$PROJECT_ROOT/docs/working"
+mkdir -p "$PROJECT_ROOT/.claude/skills"
+mkdir -p "$WORKTREE/docs/core"
+mkdir -p "$WORKTREE/docs/working"
 
 # Add .gitkeep to working directory
-touch "$PROJECT_ROOT/docs/working/.gitkeep"
+touch "$WORKTREE/docs/working/.gitkeep"
 
 # Add .gitignore for working directory (don't commit temp files)
-echo "*" > "$PROJECT_ROOT/docs/working/.gitignore"
-echo "!.gitkeep" >> "$PROJECT_ROOT/docs/working/.gitignore"
-echo "!.gitignore" >> "$PROJECT_ROOT/docs/working/.gitignore"
+if [ ! -f "$WORKTREE/docs/working/.gitignore" ]; then
+    cat > "$WORKTREE/docs/working/.gitignore" << 'EOF'
+*
+!.gitkeep
+!.gitignore
+EOF
+fi
 
 # -----------------------------------------------------------------------------
-# Copy and configure hooks
+# Copy and configure hooks (always overwrite)
 # -----------------------------------------------------------------------------
 echo "Installing hooks..."
 
-# Copy each hook and update PROJECT_ROOT
 for hook in session-start.sh session-end.sh context-enricher.sh validate-docs.sh; do
     if [ -f "$SCRIPT_DIR/.claude/hooks/$hook" ]; then
-        # Copy the hook
         cp "$SCRIPT_DIR/.claude/hooks/$hook" "$PROJECT_ROOT/.claude/hooks/$hook"
 
         # Update PROJECT_ROOT variable in the hook
-        sed -i.bak "s|^PROJECT_ROOT=.*|PROJECT_ROOT=\"$PROJECT_ROOT\"|" "$PROJECT_ROOT/.claude/hooks/$hook"
-        rm -f "$PROJECT_ROOT/.claude/hooks/$hook.bak"
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            sed -i '' "s|^PROJECT_ROOT=.*|PROJECT_ROOT=\"$PROJECT_ROOT\"|" "$PROJECT_ROOT/.claude/hooks/$hook"
+        else
+            sed -i "s|^PROJECT_ROOT=.*|PROJECT_ROOT=\"$PROJECT_ROOT\"|" "$PROJECT_ROOT/.claude/hooks/$hook"
+        fi
 
-        # Make executable
         chmod +x "$PROJECT_ROOT/.claude/hooks/$hook"
-
         echo -e "  ${GREEN}+${NC} $hook"
     fi
 done
 
-# Copy telemetry helper (sourced by other hooks, not a standalone hook)
+# Copy telemetry helper
 if [ -f "$SCRIPT_DIR/.claude/hooks/telemetry.sh" ]; then
     cp "$SCRIPT_DIR/.claude/hooks/telemetry.sh" "$PROJECT_ROOT/.claude/hooks/telemetry.sh"
     chmod +x "$PROJECT_ROOT/.claude/hooks/telemetry.sh"
@@ -100,18 +159,21 @@ if [ -f "$SCRIPT_DIR/.claude/hooks/telemetry.sh" ]; then
 fi
 
 # -----------------------------------------------------------------------------
-# Copy skills
+# Install skills (append - don't overwrite existing)
 # -----------------------------------------------------------------------------
 echo "Installing skills..."
 
 if [ -d "$SCRIPT_DIR/.claude/skills" ]; then
-    # Copy each skill directory
     for skill_dir in "$SCRIPT_DIR/.claude/skills"/*/; do
         if [ -d "$skill_dir" ]; then
             skill_name=$(basename "$skill_dir")
-            mkdir -p "$PROJECT_ROOT/.claude/skills/$skill_name"
-            cp -r "$skill_dir"* "$PROJECT_ROOT/.claude/skills/$skill_name/" 2>/dev/null || true
-            echo -e "  ${GREEN}+${NC} $skill_name"
+            if [ -d "$PROJECT_ROOT/.claude/skills/$skill_name" ]; then
+                echo -e "  ${YELLOW}~${NC} $skill_name (exists, preserved)"
+            else
+                mkdir -p "$PROJECT_ROOT/.claude/skills/$skill_name"
+                cp -r "$skill_dir"* "$PROJECT_ROOT/.claude/skills/$skill_name/" 2>/dev/null || true
+                echo -e "  ${GREEN}+${NC} $skill_name"
+            fi
         fi
     done
 else
@@ -119,11 +181,11 @@ else
 fi
 
 # -----------------------------------------------------------------------------
-# Create settings.json with correct paths
+# Merge settings.json (preserve existing settings, add/update hooks)
 # -----------------------------------------------------------------------------
-echo "Creating settings.json..."
+echo "Configuring settings.json..."
 
-cat > "$PROJECT_ROOT/.claude/settings.json" << EOF
+MEMEX_HOOKS=$(cat << EOF
 {
   "hooks": {
     "SessionStart": [
@@ -170,45 +232,105 @@ cat > "$PROJECT_ROOT/.claude/settings.json" << EOF
   }
 }
 EOF
+)
 
-echo -e "  ${GREEN}+${NC} settings.json"
+SETTINGS_FILE="$PROJECT_ROOT/.claude/settings.json"
+
+if [ -f "$SETTINGS_FILE" ] && command -v jq &> /dev/null; then
+    # Merge with existing settings (deep merge hooks)
+    EXISTING=$(cat "$SETTINGS_FILE")
+
+    # Use jq to merge - memex hooks take precedence
+    MERGED=$(echo "$EXISTING" | jq --argjson memex "$MEMEX_HOOKS" '
+        . * $memex
+    ' 2>/dev/null)
+
+    if [ -n "$MERGED" ] && [ "$MERGED" != "null" ]; then
+        echo "$MERGED" > "$SETTINGS_FILE"
+        echo -e "  ${GREEN}*${NC} settings.json (merged)"
+    else
+        # Fallback: overwrite if merge fails
+        echo "$MEMEX_HOOKS" > "$SETTINGS_FILE"
+        echo -e "  ${YELLOW}!${NC} settings.json (merge failed, overwritten)"
+    fi
+else
+    # No existing file or no jq - create new
+    echo "$MEMEX_HOOKS" > "$SETTINGS_FILE"
+    if [ -f "$SETTINGS_FILE.bak" ] 2>/dev/null; then
+        echo -e "  ${GREEN}+${NC} settings.json (created, old backed up)"
+    else
+        echo -e "  ${GREEN}+${NC} settings.json"
+    fi
+fi
 
 # -----------------------------------------------------------------------------
-# Copy documentation templates
+# CLAUDE.md - Append memex section if not present
 # -----------------------------------------------------------------------------
-echo "Creating documentation templates..."
+echo "Configuring CLAUDE.md..."
 
-# CLAUDE.md
-if [ ! -f "$PROJECT_ROOT/CLAUDE.md" ]; then
+CLAUDE_FILE="$PROJECT_ROOT/CLAUDE.md"
+PROJECT_NAME=$(basename "$WORKTREE")
+
+if [ -f "$CLAUDE_FILE" ]; then
+    # Check if memex section already exists
+    if grep -q "$MEMEX_MARKER" "$CLAUDE_FILE" 2>/dev/null; then
+        echo -e "  ${YELLOW}~${NC} CLAUDE.md (memex section exists)"
+    else
+        # Append memex section
+        if [ -f "$SCRIPT_DIR/templates/CLAUDE.md.template" ]; then
+            echo "" >> "$CLAUDE_FILE"
+            echo "$MEMEX_MARKER" >> "$CLAUDE_FILE"
+            echo "# Memex Documentation System" >> "$CLAUDE_FILE"
+            echo "" >> "$CLAUDE_FILE"
+            # Append template content (skip the header line)
+            tail -n +2 "$SCRIPT_DIR/templates/CLAUDE.md.template" | sed "s/{{PROJECT_NAME}}/$PROJECT_NAME/g" >> "$CLAUDE_FILE"
+            echo -e "  ${GREEN}*${NC} CLAUDE.md (appended memex section)"
+        fi
+    fi
+else
+    # Create new CLAUDE.md
     if [ -f "$SCRIPT_DIR/templates/CLAUDE.md.template" ]; then
-        PROJECT_NAME=$(basename "$PROJECT_ROOT")
-        sed "s/{{PROJECT_NAME}}/$PROJECT_NAME/g" "$SCRIPT_DIR/templates/CLAUDE.md.template" > "$PROJECT_ROOT/CLAUDE.md"
+        echo "$MEMEX_MARKER" > "$CLAUDE_FILE"
+        sed "s/{{PROJECT_NAME}}/$PROJECT_NAME/g" "$SCRIPT_DIR/templates/CLAUDE.md.template" >> "$CLAUDE_FILE"
         echo -e "  ${GREEN}+${NC} CLAUDE.md"
     fi
-else
-    echo -e "  ${YELLOW}~${NC} CLAUDE.md (already exists, skipped)"
 fi
 
-# GLOSSARY.md
-if [ ! -f "$PROJECT_ROOT/docs/GLOSSARY.md" ]; then
-    if [ -f "$SCRIPT_DIR/templates/GLOSSARY.md.template" ]; then
-        PROJECT_NAME=$(basename "$PROJECT_ROOT")
-        sed "s/{{PROJECT_NAME}}/$PROJECT_NAME/g" "$SCRIPT_DIR/templates/GLOSSARY.md.template" > "$PROJECT_ROOT/docs/GLOSSARY.md"
-        echo -e "  ${GREEN}+${NC} docs/GLOSSARY.md"
+# -----------------------------------------------------------------------------
+# GLOSSARY.md - Backup existing, install latest (in worktree)
+# -----------------------------------------------------------------------------
+echo "Installing documentation templates..."
+
+GLOSSARY_FILE="$WORKTREE/docs/GLOSSARY.md"
+TODAY=$(date +%Y-%m-%d)
+
+if [ -f "$SCRIPT_DIR/templates/GLOSSARY.md.template" ]; then
+    if [ -f "$GLOSSARY_FILE" ]; then
+        # Backup existing
+        mv "$GLOSSARY_FILE" "$GLOSSARY_FILE.old"
+        echo -e "  ${YELLOW}~${NC} docs/GLOSSARY.md.old (backed up)"
     fi
-else
-    echo -e "  ${YELLOW}~${NC} docs/GLOSSARY.md (already exists, skipped)"
+    # Install new
+    sed -e "s/{{PROJECT_NAME}}/$PROJECT_NAME/g" -e "s/{{DATE}}/$TODAY/g" \
+        "$SCRIPT_DIR/templates/GLOSSARY.md.template" > "$GLOSSARY_FILE"
+    echo -e "  ${GREEN}+${NC} docs/GLOSSARY.md"
 fi
 
-# CONTRIBUTING.md
-if [ ! -f "$PROJECT_ROOT/docs/CONTRIBUTING.md" ]; then
-    if [ -f "$SCRIPT_DIR/templates/CONTRIBUTING.md.template" ]; then
-        PROJECT_NAME=$(basename "$PROJECT_ROOT")
-        sed "s/{{PROJECT_NAME}}/$PROJECT_NAME/g" "$SCRIPT_DIR/templates/CONTRIBUTING.md.template" > "$PROJECT_ROOT/docs/CONTRIBUTING.md"
-        echo -e "  ${GREEN}+${NC} docs/CONTRIBUTING.md"
+# -----------------------------------------------------------------------------
+# CONTRIBUTING.md - Backup existing, install latest (in worktree)
+# -----------------------------------------------------------------------------
+CONTRIBUTING_FILE="$WORKTREE/docs/CONTRIBUTING.md"
+
+if [ -f "$SCRIPT_DIR/templates/CONTRIBUTING.md.template" ]; then
+    if [ -f "$CONTRIBUTING_FILE" ]; then
+        # Backup existing
+        mv "$CONTRIBUTING_FILE" "$CONTRIBUTING_FILE.old"
+        echo -e "  ${YELLOW}~${NC} docs/CONTRIBUTING.md.old (backed up)"
     fi
-else
-    echo -e "  ${YELLOW}~${NC} docs/CONTRIBUTING.md (already exists, skipped)"
+    # Install new
+    sed "s/{{PROJECT_NAME}}/$PROJECT_NAME/g" \
+        "$SCRIPT_DIR/templates/CONTRIBUTING.md.template" > "$CONTRIBUTING_FILE"
+    echo -e "  ${GREEN}+${NC} docs/CONTRIBUTING.md"
 fi
 
 # -----------------------------------------------------------------------------
@@ -219,9 +341,10 @@ echo "Checking dependencies..."
 if command -v jq &> /dev/null; then
     echo -e "  ${GREEN}+${NC} jq found"
 else
-    echo -e "  ${YELLOW}!${NC} jq not found - install it for full functionality"
+    echo -e "  ${YELLOW}!${NC} jq not found - settings.json merge requires jq"
     echo "    macOS: brew install jq"
-    echo "    Ubuntu: apt-get install jq"
+    echo "    Ubuntu/Debian: apt-get install jq"
+    echo "    Alpine: apk add jq"
 fi
 
 # -----------------------------------------------------------------------------
@@ -232,21 +355,14 @@ echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}  Installation complete!${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
+echo "Installed components:"
+echo "  Claude config:  $PROJECT_ROOT/.claude/"
+echo "  Documentation:  $WORKTREE/docs/"
+echo ""
 echo "Next steps:"
-echo ""
-echo "1. Customize your documentation:"
-echo "   - Edit CLAUDE.md with your project's key info"
-echo "   - Edit docs/GLOSSARY.md with your keywords"
-echo "   - Add docs to docs/core/, docs/features/, etc."
-echo ""
-echo "2. Customize the context-enricher hook:"
-echo "   - Edit .claude/hooks/context-enricher.sh"
-echo "   - Add keyword patterns for your docs"
-echo ""
-echo "3. Start a Claude Code session to test:"
-echo "   - Session start hook will show git info"
-echo "   - Try asking about 'architecture' or 'database'"
-echo "   - Relevant docs will auto-inject into context"
+echo "  1. Review docs/GLOSSARY.md.old if it was backed up"
+echo "  2. Customize docs/GLOSSARY.md with your keywords"
+echo "  3. Add documentation to docs/core/"
 echo ""
 echo -e "Docs: ${BLUE}https://github.com/johnpsasser/memex${NC}"
 echo ""
