@@ -131,8 +131,10 @@ memex/
 │       ├── scan-docs.sh          # Auto-glossary generator utility
 │       └── telemetry.sh          # OpenTelemetry export helper
 ├── skills/
-│   └── memex-docs/
-│       └── SKILL.md              # Documentation writing guidelines skill
+│   ├── memex-docs/
+│   │   └── SKILL.md              # Documentation writing guidelines skill
+│   └── migrate-docs/
+│       └── SKILL.md              # Legacy documentation migration skill
 ├── templates/
 │   ├── CLAUDE.md.template        # Master reference template
 │   ├── GLOSSARY.md.template      # Keyword index template
@@ -166,6 +168,21 @@ The `memex-docs` skill provides documentation writing guidelines that Claude loa
 - GLOSSARY.md formatting rules
 
 The skill loads automatically when Claude detects documentation work, keeping guidelines out of context until needed.
+
+### Skill: migrate-docs
+
+The `migrate-docs` skill helps migrate existing markdown documentation into the memex structure. Use it when installing memex in a repo with existing docs:
+
+```
+/migrate-docs
+```
+
+The skill guides Claude through:
+- **Discovery** - Scans for `.md` files outside `docs/`
+- **Categorization** - Interactive assignment to `core/`, `features/`, or `working/`
+- **Migration** - Uses `git mv` to preserve history
+- **Reformatting** - Splits large files, adds anchors, converts to tables
+- **Glossary update** - Generates keywords for migrated content
 
 ## Requirements
 

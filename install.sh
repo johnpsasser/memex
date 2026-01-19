@@ -348,6 +348,12 @@ if [ -d "$SCRIPT_DIR/skills/memex-docs" ]; then
     echo -e "  ${GREEN}+${NC} memex-docs skill"
 fi
 
+# migrate-docs skill
+if [ -d "$SCRIPT_DIR/skills/migrate-docs" ]; then
+    cp -r "$SCRIPT_DIR/skills/migrate-docs" "$PROJECT_ROOT/.claude/skills/"
+    echo -e "  ${GREEN}+${NC} migrate-docs skill"
+fi
+
 # -----------------------------------------------------------------------------
 # Check for jq dependency
 # -----------------------------------------------------------------------------
