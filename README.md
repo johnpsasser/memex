@@ -37,6 +37,8 @@ The installer will:
 
 ## How It Works
 
+![Memex Architecture](memex-architecture.png)
+
 The system has four hooks that run at different points:
 
 | Hook | When | What It Does |
