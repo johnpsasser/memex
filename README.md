@@ -17,6 +17,8 @@ Memex uses Claude Code hooks to:
 5. **Track session state** - Shows git status and available docs when you start a session
 6. **Validate docs** - Warns when files exceed 800 lines or sections exceed 150 lines
 7. **Archive working notes** - Cleans up temporary working documents at session end
+8. **Auto-update** - Checks for memex updates on session start and installs them automatically
+9. **Migrate existing docs** - Discovers, deduplicates, and organizes documentation during install
 
 ## Installation
 
@@ -29,11 +31,22 @@ cd your-project
 /path/to/memex/install.sh
 ```
 
-The installer will:
-- Create `.claude/hooks/` with all hook scripts
-- Create `.claude/settings.json` with hook configuration
-- Create template documentation files in `docs/`
-- Set up a `docs/working/` directory for temporary notes
+### Installer Options
+
+| Option | Description |
+|--------|-------------|
+| `-f, --force` | Skip confirmation prompts |
+| `-w, --worktree PATH` | Specify git worktree path for docs/ |
+| `--no-migration` | Skip automatic documentation migration |
+
+### What the Installer Does
+
+1. Creates `.claude/hooks/` with all hook scripts
+2. Creates `.claude/settings.json` with hook configuration
+3. Creates template documentation files in `docs/`
+4. Sets up `docs/working/` for temporary notes
+5. **Migrates existing docs** - discovers `.md` files, deduplicates by content hash, archives originals to `docs/archive/`
+6. **Enables auto-updates** - stores memex source path for automatic updates on session start
 
 ## How It Works
 
@@ -95,13 +108,63 @@ your-project/
 │   │   ├── DATABASE.md
 │   │   └── API.md
 │   ├── features/          # Feature-specific docs
+│   ├── archive/           # Preserved original docs (excluded from loading)
 │   └── working/           # Temp files (gitignored)
 └── .claude/
     ├── settings.json      # Hook configuration
+    ├── .memex-source      # Path to memex repo (for auto-updates)
     └── hooks/             # Hook scripts
 ```
 
 The idea is that GLOSSARY.md is cheap to load (just keyword mappings), and the full docs only get loaded when relevant.
+
+## Auto-Updates
+
+Memex automatically checks for updates when a Claude Code session starts. If updates are available, they're pulled and installed automatically.
+
+### How It Works
+
+1. On install, memex stores its source path in `.claude/.memex-source`
+2. On session start, `session-start.sh` checks if the memex repo has new commits
+3. If updates exist, memex pulls and re-runs the installer
+
+### Disabling Auto-Updates
+
+Set the environment variable to disable:
+
+```bash
+export MEMEX_UPDATES_DISABLED=TRUE
+```
+
+Add to your shell profile (`.bashrc`, `.zshrc`) to disable permanently.
+
+## Documentation Migration
+
+During installation, memex automatically discovers and organizes existing documentation.
+
+### What Gets Migrated
+
+| Original Location | Destination | Condition |
+|-------------------|-------------|-----------|
+| `.md` files outside `docs/` | `docs/core/` | Filenames with ARCHITECTURE, DATABASE, API, SCHEMA, CONFIG |
+| `.md` files outside `docs/` | `docs/features/` | Other documentation files |
+| README, CHANGELOG, LICENSE | `docs/archive/` only | Project meta-docs (not loaded) |
+
+### Deduplication
+
+Files are hashed (MD5) to detect duplicates. If identical content already exists, the file is skipped.
+
+### Archive Behavior
+
+- Original files are copied (not moved) to `docs/archive/`
+- Archive files are never loaded by the context-enricher
+- Use archive to reference original content if needed
+
+### Skip Migration
+
+```bash
+./install.sh --no-migration /path/to/project
+```
 
 ## The Glossary
 
@@ -309,10 +372,11 @@ All metrics include these resource attributes:
 
 ### Configuration Options
 
-Memex respects these Claude Code / OpenTelemetry environment variables:
+Memex respects these environment variables:
 
 | Variable | Purpose |
 |----------|---------|
+| `MEMEX_UPDATES_DISABLED` | Set to `TRUE` to disable auto-updates |
 | `CLAUDE_CODE_ENABLE_TELEMETRY` | Enable telemetry (must be `1`) |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | Collector endpoint |
 | `OTEL_EXPORTER_OTLP_HEADERS` | Auth headers (format: `Key=Value,Key2=Value2`) |

@@ -4,6 +4,14 @@
 # =============================================================================
 # Sets up the context-aware documentation system for Claude Code.
 #
+# Usage:
+#   ./install.sh [options] [project_path]
+#
+# Options:
+#   -f, --force         Skip confirmation prompts
+#   -w, --worktree      Specify git worktree path (for docs/)
+#   --no-migration      Skip automatic documentation migration
+#
 # Installation targets:
 #   - Claude Code config (hooks, settings, skills) -> PROJECT_ROOT/.claude/
 #   - CLAUDE.md -> PROJECT_ROOT/CLAUDE.md
@@ -16,6 +24,18 @@
 #   - Hooks: Always overwrite with latest
 #   - settings.json: Merge hooks (preserve other settings)
 #   - Skills: Add new skills, preserve existing customizations
+#
+# Documentation Migration (default: enabled):
+#   - Discovers .md files outside docs/
+#   - Deduplicates by content hash (MD5)
+#   - Archives originals to docs/archive/
+#   - Migrates to docs/core/ or docs/features/ based on filename
+#   - docs/archive/ is excluded from context loading
+#
+# Auto-Update:
+#   - Stores memex source path in .claude/.memex-source
+#   - session-start.sh checks for updates and auto-installs
+#   - Disable with: export MEMEX_UPDATES_DISABLED=TRUE
 # =============================================================================
 
 set -e
@@ -42,6 +62,7 @@ echo ""
 PROJECT_ROOT=""
 WORKTREE=""
 FORCE_MODE=0
+NO_MIGRATION=0
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -52,6 +73,10 @@ while [[ $# -gt 0 ]]; do
         -w|--worktree)
             WORKTREE="$2"
             shift 2
+            ;;
+        --no-migration)
+            NO_MIGRATION=1
+            shift
             ;;
         *)
             if [ -z "$PROJECT_ROOT" ]; then
@@ -116,6 +141,8 @@ echo "Creating directories..."
 mkdir -p "$PROJECT_ROOT/.claude/hooks"
 mkdir -p "$PROJECT_ROOT/.claude/skills"
 mkdir -p "$WORKTREE/docs/core"
+mkdir -p "$WORKTREE/docs/features"
+mkdir -p "$WORKTREE/docs/archive"
 mkdir -p "$WORKTREE/docs/working"
 
 # Add .gitkeep to working directory
@@ -128,6 +155,115 @@ if [ ! -f "$WORKTREE/docs/working/.gitignore" ]; then
 !.gitkeep
 !.gitignore
 EOF
+fi
+
+# -----------------------------------------------------------------------------
+# Store memex source path for auto-updates
+# -----------------------------------------------------------------------------
+echo "$SCRIPT_DIR" > "$PROJECT_ROOT/.claude/.memex-source"
+
+# -----------------------------------------------------------------------------
+# Documentation Migration (unless --no-migration)
+# -----------------------------------------------------------------------------
+if [ "$NO_MIGRATION" -eq 0 ]; then
+    echo "Discovering existing documentation..."
+
+    MIGRATION_COUNT=0
+    DUPLICATE_COUNT=0
+    declare -a MIGRATED_FILES=()
+
+    # Create hash tracking file
+    HASH_FILE="$WORKTREE/docs/archive/.content-hashes"
+    touch "$HASH_FILE"
+
+    # Find all .md files outside docs/ directory
+    while IFS= read -r -d '' md_file; do
+        # Skip files already in docs/
+        case "$md_file" in
+            "$WORKTREE/docs/"*) continue ;;
+        esac
+
+        # Skip CLAUDE.md (handled separately)
+        if [[ "$(basename "$md_file")" == "CLAUDE.md" ]]; then
+            continue
+        fi
+
+        # Skip node_modules, .git, vendor directories
+        case "$md_file" in
+            *"/node_modules/"*|*"/.git/"*|*"/vendor/"*) continue ;;
+        esac
+
+        # Calculate content hash (MD5)
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            CONTENT_HASH=$(md5 -q "$md_file" 2>/dev/null)
+        else
+            CONTENT_HASH=$(md5sum "$md_file" 2>/dev/null | cut -d' ' -f1)
+        fi
+
+        # Check for duplicate content
+        if grep -q "^$CONTENT_HASH " "$HASH_FILE" 2>/dev/null; then
+            DUPLICATE_COUNT=$((DUPLICATE_COUNT + 1))
+            echo -e "  ${YELLOW}~${NC} $(basename "$md_file") (duplicate, skipped)"
+            continue
+        fi
+
+        # Determine target location based on filename/content
+        FILENAME=$(basename "$md_file")
+        FILENAME_UPPER=$(echo "$FILENAME" | tr '[:lower:]' '[:upper:]')
+
+        # Categorize: core docs vs feature docs
+        case "$FILENAME_UPPER" in
+            *ARCHITECTURE*|*DATABASE*|*API*|*SCHEMA*|*CONFIG*)
+                TARGET_DIR="$WORKTREE/docs/core"
+                ;;
+            *README*|*CHANGELOG*|*LICENSE*|*CONTRIBUTING*|*CODE_OF_CONDUCT*)
+                # Keep these in archive only (they're project meta-docs)
+                TARGET_DIR=""
+                ;;
+            *)
+                TARGET_DIR="$WORKTREE/docs/features"
+                ;;
+        esac
+
+        # Archive the original
+        ARCHIVE_PATH="$WORKTREE/docs/archive/$FILENAME"
+        if [ -f "$ARCHIVE_PATH" ]; then
+            # Add timestamp to avoid overwriting
+            ARCHIVE_PATH="$WORKTREE/docs/archive/${FILENAME%.md}_$(date +%Y%m%d%H%M%S).md"
+        fi
+        cp "$md_file" "$ARCHIVE_PATH"
+
+        # Record hash
+        echo "$CONTENT_HASH $ARCHIVE_PATH" >> "$HASH_FILE"
+
+        # Copy to target location (if not just archiving)
+        if [ -n "$TARGET_DIR" ]; then
+            TARGET_PATH="$TARGET_DIR/$FILENAME"
+            if [ ! -f "$TARGET_PATH" ]; then
+                cp "$md_file" "$TARGET_PATH"
+                MIGRATED_FILES+=("$FILENAME")
+                echo -e "  ${GREEN}+${NC} $FILENAME -> $(basename "$TARGET_DIR")/"
+            else
+                echo -e "  ${YELLOW}~${NC} $FILENAME (target exists, archived only)"
+            fi
+        else
+            echo -e "  ${BLUE}→${NC} $FILENAME -> archive/"
+        fi
+
+        MIGRATION_COUNT=$((MIGRATION_COUNT + 1))
+
+    done < <(find "$WORKTREE" -name "*.md" -type f -print0 2>/dev/null)
+
+    if [ "$MIGRATION_COUNT" -gt 0 ]; then
+        echo -e "  Migrated: ${GREEN}$MIGRATION_COUNT${NC} files"
+        [ "$DUPLICATE_COUNT" -gt 0 ] && echo -e "  Duplicates skipped: ${YELLOW}$DUPLICATE_COUNT${NC}"
+    else
+        echo -e "  ${BLUE}(no documentation found to migrate)${NC}"
+    fi
+    echo ""
+else
+    echo -e "${YELLOW}Skipping documentation migration (--no-migration)${NC}"
+    echo ""
 fi
 
 # -----------------------------------------------------------------------------
@@ -164,6 +300,9 @@ fi
 # -----------------------------------------------------------------------------
 echo "Installing skills..."
 
+SKILLS_INSTALLED=0
+
+# Install from .claude/skills/ (bundled skills)
 if [ -d "$SCRIPT_DIR/.claude/skills" ]; then
     for skill_dir in "$SCRIPT_DIR/.claude/skills"/*/; do
         if [ -d "$skill_dir" ]; then
@@ -174,11 +313,31 @@ if [ -d "$SCRIPT_DIR/.claude/skills" ]; then
                 mkdir -p "$PROJECT_ROOT/.claude/skills/$skill_name"
                 cp -r "$skill_dir"* "$PROJECT_ROOT/.claude/skills/$skill_name/" 2>/dev/null || true
                 echo -e "  ${GREEN}+${NC} $skill_name"
+                SKILLS_INSTALLED=$((SKILLS_INSTALLED + 1))
             fi
         fi
     done
-else
-    echo -e "  ${YELLOW}~${NC} No skills to install"
+fi
+
+# Install from skills/ (source skills directory)
+if [ -d "$SCRIPT_DIR/skills" ]; then
+    for skill_dir in "$SCRIPT_DIR/skills"/*/; do
+        if [ -d "$skill_dir" ]; then
+            skill_name=$(basename "$skill_dir")
+            if [ -d "$PROJECT_ROOT/.claude/skills/$skill_name" ]; then
+                echo -e "  ${YELLOW}~${NC} $skill_name (exists, preserved)"
+            else
+                mkdir -p "$PROJECT_ROOT/.claude/skills/$skill_name"
+                cp -r "$skill_dir"* "$PROJECT_ROOT/.claude/skills/$skill_name/" 2>/dev/null || true
+                echo -e "  ${GREEN}+${NC} $skill_name"
+                SKILLS_INSTALLED=$((SKILLS_INSTALLED + 1))
+            fi
+        fi
+    done
+fi
+
+if [ "$SKILLS_INSTALLED" -eq 0 ]; then
+    echo -e "  ${BLUE}(all skills already installed)${NC}"
 fi
 
 # -----------------------------------------------------------------------------
@@ -332,26 +491,6 @@ if [ -f "$SCRIPT_DIR/templates/CONTRIBUTING.md.template" ]; then
     sed "s/{{PROJECT_NAME}}/$PROJECT_NAME/g" \
         "$SCRIPT_DIR/templates/CONTRIBUTING.md.template" > "$CONTRIBUTING_FILE"
     echo -e "  ${GREEN}+${NC} docs/CONTRIBUTING.md"
-fi
-
-# -----------------------------------------------------------------------------
-# Install skills
-# -----------------------------------------------------------------------------
-echo "Installing skills..."
-
-# Create skills directory
-mkdir -p "$PROJECT_ROOT/.claude/skills"
-
-# memex-docs skill
-if [ -d "$SCRIPT_DIR/skills/memex-docs" ]; then
-    cp -r "$SCRIPT_DIR/skills/memex-docs" "$PROJECT_ROOT/.claude/skills/"
-    echo -e "  ${GREEN}+${NC} memex-docs skill"
-fi
-
-# migrate-docs skill
-if [ -d "$SCRIPT_DIR/skills/migrate-docs" ]; then
-    cp -r "$SCRIPT_DIR/skills/migrate-docs" "$PROJECT_ROOT/.claude/skills/"
-    echo -e "  ${GREEN}+${NC} migrate-docs skill"
 fi
 
 # -----------------------------------------------------------------------------

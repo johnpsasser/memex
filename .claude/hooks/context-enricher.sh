@@ -314,6 +314,11 @@ for doc_ref in $MATCHED_DOCS; do
 
     FULL_PATH="$DOCS_DIR/$doc_file"
 
+    # Skip archived docs (they're preserved but not loaded)
+    case "$doc_file" in
+        archive/*|*/archive/*) continue ;;
+    esac
+
     if [ -f "$FULL_PATH" ]; then
         DOCS_LOADED=$((DOCS_LOADED + 1))
 

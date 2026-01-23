@@ -14,6 +14,58 @@ cd "$PROJECT_ROOT"
 PROJECT_NAME=$(basename "$PROJECT_ROOT")
 
 # -----------------------------------------------------------------------------
+# Memex Auto-Update (check for updates to memex itself)
+# Disable with: export MEMEX_UPDATES_DISABLED=TRUE
+# -----------------------------------------------------------------------------
+MEMEX_SOURCE_FILE="$PROJECT_ROOT/.claude/.memex-source"
+if [ -f "$MEMEX_SOURCE_FILE" ] && [ "${MEMEX_UPDATES_DISABLED:-}" != "TRUE" ]; then
+    MEMEX_DIR=$(cat "$MEMEX_SOURCE_FILE")
+
+    if [ -d "$MEMEX_DIR/.git" ]; then
+        # Save current directory
+        ORIG_DIR=$(pwd)
+        cd "$MEMEX_DIR"
+
+        # Fetch latest (silent)
+        git fetch origin main --quiet 2>/dev/null || true
+
+        # Compare local vs remote
+        LOCAL_HASH=$(git rev-parse HEAD 2>/dev/null)
+        REMOTE_HASH=$(git rev-parse origin/main 2>/dev/null)
+
+        if [ -n "$LOCAL_HASH" ] && [ -n "$REMOTE_HASH" ] && [ "$LOCAL_HASH" != "$REMOTE_HASH" ]; then
+            # Updates available
+            echo ""
+            echo "=============================================="
+            echo "  MEMEX UPDATE AVAILABLE"
+            echo "=============================================="
+
+            # Show what's new (last 3 commits on remote)
+            echo "New commits:"
+            git log --oneline HEAD..origin/main 2>/dev/null | head -3 | sed 's/^/  /'
+            echo ""
+
+            # Attempt to pull and reinstall
+            if git pull --ff-only origin main 2>/dev/null; then
+                echo "Updating memex..."
+                if "$MEMEX_DIR/install.sh" -f "$PROJECT_ROOT" 2>/dev/null; then
+                    echo "Memex updated successfully!"
+                else
+                    echo "Warning: Memex update installed, but reinstall had issues."
+                fi
+            else
+                echo "Note: Memex has local changes. Run manually:"
+                echo "  cd $MEMEX_DIR && git pull && ./install.sh -f $PROJECT_ROOT"
+            fi
+            echo "=============================================="
+            echo ""
+        fi
+
+        cd "$ORIG_DIR"
+    fi
+fi
+
+# -----------------------------------------------------------------------------
 # Auto-pull latest changes (conservative approach)
 # Only pulls on main/master, only if working tree is clean, ff-only
 # -----------------------------------------------------------------------------
