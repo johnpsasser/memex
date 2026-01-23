@@ -444,7 +444,11 @@ emit_validation_warning() {
 emit_budget_status() {
     local tokens_used="$1"
     local budget_total="$2"
-    local utilization=$((tokens_used * 100 / budget_total))
+    local utilization=0
+    # Avoid division by zero
+    if [ "$budget_total" -gt 0 ]; then
+        utilization=$((tokens_used * 100 / budget_total))
+    fi
     emit_gauge "memex.tokens.budget.used" "$tokens_used" "{}"
     emit_gauge "memex.tokens.budget.utilization_percent" "$utilization" "{}"
 }

@@ -17,6 +17,26 @@ PROJECT_NAME=$(basename "$PROJECT_ROOT")
 # Memex Auto-Update (check for updates to memex itself)
 # Disable with: export MEMEX_UPDATES_DISABLED=TRUE
 # -----------------------------------------------------------------------------
+# Trusted remote URL patterns for memex auto-update
+# Add your organization's trusted remotes here
+MEMEX_TRUSTED_REMOTES="github.com/johnpsasser/memex github.com/your-org/memex"
+
+# Function to validate git remote URL
+validate_memex_remote() {
+    local remote_url="$1"
+    local trusted_pattern
+
+    # Normalize URL: remove protocol prefix and .git suffix for comparison
+    local normalized_url=$(echo "$remote_url" | sed -E 's#^(https?://|git@|ssh://git@)##; s#:#/#; s#\.git$##')
+
+    for trusted_pattern in $MEMEX_TRUSTED_REMOTES; do
+        if [ "$normalized_url" = "$trusted_pattern" ]; then
+            return 0  # Trusted
+        fi
+    done
+    return 1  # Not trusted
+}
+
 MEMEX_SOURCE_FILE="$PROJECT_ROOT/.claude/.memex-source"
 if [ -f "$MEMEX_SOURCE_FILE" ] && [ "${MEMEX_UPDATES_DISABLED:-}" != "TRUE" ]; then
     MEMEX_DIR=$(cat "$MEMEX_SOURCE_FILE")
@@ -26,42 +46,68 @@ if [ -f "$MEMEX_SOURCE_FILE" ] && [ "${MEMEX_UPDATES_DISABLED:-}" != "TRUE" ]; t
         ORIG_DIR=$(pwd)
         cd "$MEMEX_DIR"
 
-        # Fetch latest (silent)
-        git fetch origin main --quiet 2>/dev/null || true
+        # Security: Validate the remote URL before fetching/pulling
+        REMOTE_URL=$(git remote get-url origin 2>/dev/null)
 
-        # Compare local vs remote
-        LOCAL_HASH=$(git rev-parse HEAD 2>/dev/null)
-        REMOTE_HASH=$(git rev-parse origin/main 2>/dev/null)
-
-        if [ -n "$LOCAL_HASH" ] && [ -n "$REMOTE_HASH" ] && [ "$LOCAL_HASH" != "$REMOTE_HASH" ]; then
-            # Updates available
+        if [ -z "$REMOTE_URL" ]; then
+            echo "Warning: Memex auto-update skipped - no remote configured" >&2
+            cd "$ORIG_DIR"
+        elif ! validate_memex_remote "$REMOTE_URL"; then
             echo ""
             echo "=============================================="
-            echo "  MEMEX UPDATE AVAILABLE"
+            echo "  MEMEX AUTO-UPDATE SECURITY WARNING"
             echo "=============================================="
-
-            # Show what's new (last 3 commits on remote)
-            echo "New commits:"
-            git log --oneline HEAD..origin/main 2>/dev/null | head -3 | sed 's/^/  /'
+            echo "  Remote URL not in trusted list:"
+            echo "    $REMOTE_URL"
             echo ""
+            echo "  Trusted remotes: $MEMEX_TRUSTED_REMOTES"
+            echo ""
+            echo "  Auto-update skipped for security."
+            echo "  To update manually after verification:"
+            echo "    cd $MEMEX_DIR && git pull && ./install.sh -f $PROJECT_ROOT"
+            echo "=============================================="
+            echo ""
+            cd "$ORIG_DIR"
+        else
+            # Remote is trusted, proceed with update check
 
-            # Attempt to pull and reinstall
-            if git pull --ff-only origin main 2>/dev/null; then
-                echo "Updating memex..."
-                if "$MEMEX_DIR/install.sh" -f "$PROJECT_ROOT" 2>/dev/null; then
-                    echo "Memex updated successfully!"
+            # Fetch latest (silent)
+            git fetch origin main --quiet 2>/dev/null || true
+
+            # Compare local vs remote
+            LOCAL_HASH=$(git rev-parse HEAD 2>/dev/null)
+            REMOTE_HASH=$(git rev-parse origin/main 2>/dev/null)
+
+            if [ -n "$LOCAL_HASH" ] && [ -n "$REMOTE_HASH" ] && [ "$LOCAL_HASH" != "$REMOTE_HASH" ]; then
+                # Updates available
+                echo ""
+                echo "=============================================="
+                echo "  MEMEX UPDATE AVAILABLE"
+                echo "=============================================="
+
+                # Show what's new (last 3 commits on remote)
+                echo "New commits:"
+                git log --oneline HEAD..origin/main 2>/dev/null | head -3 | sed 's/^/  /'
+                echo ""
+
+                # Attempt to pull and reinstall
+                if git pull --ff-only origin main 2>/dev/null; then
+                    echo "Updating memex..."
+                    if "$MEMEX_DIR/install.sh" -f "$PROJECT_ROOT" 2>/dev/null; then
+                        echo "Memex updated successfully!"
+                    else
+                        echo "Warning: Memex update installed, but reinstall had issues."
+                    fi
                 else
-                    echo "Warning: Memex update installed, but reinstall had issues."
+                    echo "Note: Memex has local changes. Run manually:"
+                    echo "  cd $MEMEX_DIR && git pull && ./install.sh -f $PROJECT_ROOT"
                 fi
-            else
-                echo "Note: Memex has local changes. Run manually:"
-                echo "  cd $MEMEX_DIR && git pull && ./install.sh -f $PROJECT_ROOT"
+                echo "=============================================="
+                echo ""
             fi
-            echo "=============================================="
-            echo ""
-        fi
 
-        cd "$ORIG_DIR"
+            cd "$ORIG_DIR"
+        fi
     fi
 fi
 

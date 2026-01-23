@@ -1,2 +1,13 @@
-# Project-specific CLAUDE.md (template is in templates/)
-CLAUDE.md
+# Personal settings (contains local paths)
+.claude/settings.local.json
+
+# OS generated files
+.DS_Store
+
+# Editor swap files
+*.swp
+*.swo
+*~
+
+# Memex working directory
+.memex/

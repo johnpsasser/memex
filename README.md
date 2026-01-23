@@ -48,6 +48,28 @@ cd your-project
 5. **Migrates existing docs** - discovers `.md` files, deduplicates by content hash, archives originals to `docs/archive/`
 6. **Enables auto-updates** - stores memex source path for automatic updates on session start
 
+### Template Variables
+
+Templates use variable substitution during installation:
+
+| Variable | Replaced With |
+|----------|---------------|
+| `{{PROJECT_ROOT}}` | Absolute path to project (used in hooks) |
+| `{{PROJECT_NAME}}` | Directory name of the project |
+| `{{DATE}}` | Installation date (YYYY-MM-DD) |
+
+### Backup Behavior
+
+When installing over existing files:
+
+| File | Behavior |
+|------|----------|
+| `CLAUDE.md` | Appends memex section (idempotent, won't duplicate) |
+| `GLOSSARY.md` | Backs up to `GLOSSARY.md.old`, installs fresh template |
+| `CONTRIBUTING.md` | Backs up to `CONTRIBUTING.md.old`, installs fresh template |
+| Hook scripts | Always overwritten with latest version |
+| `settings.json` | Merged (memex hooks added, other settings preserved) |
+
 ## How It Works
 
 ![Memex Architecture](memex-architecture.png)
@@ -56,10 +78,10 @@ The system has four hooks that run at different points:
 
 | Hook | When | What It Does |
 |------|------|--------------|
-| `session-start.sh` | Session begins | Shows git info, lists available docs |
+| `session-start.sh` | Session begins | Auto-pulls main branch (if clean), shows git info, lists available docs |
 | `context-enricher.sh` | You submit a prompt | Scans for keywords, injects matching docs |
 | `validate-docs.sh` | After editing `docs/*.md` | Reminds to update GLOSSARY.md |
-| `session-end.sh` | Session ends | Archives working documents |
+| `session-end.sh` | Session ends | Archives working documents to `~/.memex/archives/` |
 
 The context-enricher hook is the key piece. It reads your prompt, looks for keywords, and wraps matching documentation in XML tags that get injected into the conversation:
 
@@ -128,15 +150,27 @@ Memex automatically checks for updates when a Claude Code session starts. If upd
 2. On session start, `session-start.sh` checks if the memex repo has new commits
 3. If updates exist, memex pulls and re-runs the installer
 
+### Project Auto-Pull
+
+In addition to memex updates, `session-start.sh` also pulls the latest changes for your project:
+
+- Only runs on `main` or `master` branches
+- Only runs if the working tree is clean (no staged or unstaged changes)
+- Uses `--ff-only` to fail safely if branches have diverged
+
+This keeps your local main branch current without disrupting work on feature branches.
+
 ### Disabling Auto-Updates
 
-Set the environment variable to disable:
+Set the environment variable to disable memex auto-updates:
 
 ```bash
 export MEMEX_UPDATES_DISABLED=TRUE
 ```
 
 Add to your shell profile (`.bashrc`, `.zshrc`) to disable permanently.
+
+**Note:** This only disables memex updates. Project auto-pull is a separate feature that always runs when conditions are met.
 
 ## Documentation Migration
 
@@ -159,6 +193,21 @@ Files are hashed (MD5) to detect duplicates. If identical content already exists
 - Original files are copied (not moved) to `docs/archive/`
 - Archive files are never loaded by the context-enricher
 - Use archive to reference original content if needed
+
+### Session Archives
+
+Working documents from `docs/working/` are archived at session end:
+
+| Item | Value |
+|------|-------|
+| Location | `$HOME/.memex/archives/` |
+| Format | `session-YYYYMMDD-HHMMSS.tar.gz` |
+| Retention | Last 20 archives (older are auto-deleted) |
+
+To restore a session archive:
+```bash
+tar -xzf ~/.memex/archives/session-20240115-143022.tar.gz -C /tmp/restore/
+```
 
 ### Skip Migration
 
@@ -277,6 +326,8 @@ Keep documents small enough to load efficiently but comprehensive enough to be u
 | Index/glossary | 1000 | 500-800 | Keyword indexes are naturally larger |
 
 The `validate-docs.sh` hook warns you when files or sections exceed these limits.
+
+**Note:** `GLOSSARY.md` is exempt from the 800-line file limit. Glossaries naturally grow with your project and serve as an index, so larger sizes are expected.
 
 When a document exceeds 800 lines, split it into sub-documents using the naming convention:
 

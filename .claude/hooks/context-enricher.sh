@@ -23,6 +23,14 @@
 
 set -e
 
+# -----------------------------------------------------------------------------
+# Dependency Check
+# -----------------------------------------------------------------------------
+if ! command -v jq &> /dev/null; then
+    echo "<!-- Memex: jq required but not found. Install with: brew install jq -->" >&2
+    exit 0
+fi
+
 PROJECT_ROOT="{{PROJECT_ROOT}}"
 DOCS_DIR="$PROJECT_ROOT/docs"
 
@@ -43,12 +51,48 @@ MAX_SECTION_LINES=150        # Maximum lines to load from a section
 MAX_TOTAL_TOKENS=10000       # Approximate token budget (~7 tokens per line)
 TOKENS_PER_LINE=7            # Rough estimate for markdown
 
-# Session cache for deduplication (unique per terminal session)
-SESSION_CACHE_DIR="/tmp/memex-session-$$"
+# Session cache for deduplication (stable across hook invocations)
+# Security approach: Use user-specific tmp dir with random session token
+# The session token is stored so it persists across hook invocations
+USER_MEMEX_TMP="${TMPDIR:-/tmp}/memex-$(id -u)"
+
+# Create user-specific directory with secure permissions
+if [ ! -d "$USER_MEMEX_TMP" ]; then
+    mkdir -p "$USER_MEMEX_TMP" 2>/dev/null || {
+        echo "Error: Failed to create memex temp directory" >&2
+        exit 1
+    }
+fi
+chmod 700 "$USER_MEMEX_TMP" 2>/dev/null || true
+
+# Verify ownership before using (prevent symlink attacks)
+if [ "$(stat -f %u "$USER_MEMEX_TMP" 2>/dev/null || stat -c %u "$USER_MEMEX_TMP" 2>/dev/null)" != "$(id -u)" ]; then
+    echo "Error: Memex temp directory ownership mismatch - possible security issue" >&2
+    exit 1
+fi
+
+# Use PPID combined with a random suffix for session identification
+# PPID provides stability across hook invocations; random suffix adds unpredictability
+SESSION_TOKEN_FILE="$USER_MEMEX_TMP/session-$PPID"
+if [ ! -f "$SESSION_TOKEN_FILE" ]; then
+    # Generate new session token with random suffix
+    RANDOM_SUFFIX=$(head -c 16 /dev/urandom 2>/dev/null | od -An -tx1 | tr -d ' \n' || echo "$$$(date +%s)")
+    echo "$RANDOM_SUFFIX" > "$SESSION_TOKEN_FILE"
+    chmod 600 "$SESSION_TOKEN_FILE"
+fi
+SESSION_TOKEN=$(cat "$SESSION_TOKEN_FILE" 2>/dev/null || echo "$PPID")
+
+SESSION_CACHE_DIR="$USER_MEMEX_TMP/cache-$SESSION_TOKEN"
 LOADED_DOCS_FILE="$SESSION_CACHE_DIR/loaded_docs"
 
-# Initialize session cache directory
-mkdir -p "$SESSION_CACHE_DIR" 2>/dev/null || true
+# Initialize session cache directory with secure permissions
+if [ ! -d "$SESSION_CACHE_DIR" ]; then
+    mkdir -p "$SESSION_CACHE_DIR" 2>/dev/null || {
+        echo "Error: Failed to create session cache directory" >&2
+        exit 1
+    }
+    chmod 700 "$SESSION_CACHE_DIR"
+fi
 
 # Read the hook input from stdin (JSON format)
 INPUT=$(cat)

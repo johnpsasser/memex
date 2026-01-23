@@ -51,9 +51,16 @@ if [ -z "$FILES" ]; then
 fi
 
 # -----------------------------------------------------------------------------
-# Create archive directory if it doesn't exist
+# Create archive directory if it doesn't exist (with secure permissions)
 # -----------------------------------------------------------------------------
-mkdir -p "$ARCHIVE_DIR"
+if ! mkdir -p "$ARCHIVE_DIR" 2>/dev/null; then
+    echo "Error: Failed to create archive directory: $ARCHIVE_DIR" >&2
+    exit 1
+fi
+chmod 700 "$ARCHIVE_DIR" || {
+    echo "Error: Failed to set permissions on archive directory" >&2
+    exit 1
+}
 
 # -----------------------------------------------------------------------------
 # Archive working documents
@@ -65,10 +72,12 @@ echo "  Source: $WORKING_DIR"
 echo "  Archive: $ARCHIVE_FILE"
 
 # Create tar archive (excluding .git* files)
+# Capture exit code immediately after tar command
 cd "$WORKING_DIR"
-tar -czf "$ARCHIVE_FILE" --exclude='.*' . 2>/dev/null
+TAR_EXIT_CODE=0
+tar -czf "$ARCHIVE_FILE" --exclude='.*' . 2>/dev/null || TAR_EXIT_CODE=$?
 
-if [ $? -eq 0 ]; then
+if [ "$TAR_EXIT_CODE" -eq 0 ]; then
     echo "  Archive created successfully."
 
     # Count archived files
@@ -82,16 +91,21 @@ if [ $? -eq 0 ]; then
     find "$WORKING_DIR" -type f ! -name ".*" -delete 2>/dev/null
     echo "  Working directory cleaned."
 else
-    echo "  Warning: Archive creation failed. Working docs preserved."
+    echo "  Warning: Archive creation failed (exit code: $TAR_EXIT_CODE). Working docs preserved."
+    # Remove potentially incomplete archive
+    rm -f "$ARCHIVE_FILE" 2>/dev/null || true
 fi
 
 # -----------------------------------------------------------------------------
 # Manage archive retention (keep last 20 archives)
 # -----------------------------------------------------------------------------
-ARCHIVE_COUNT=$(ls -1 "$ARCHIVE_DIR"/*.tar.gz 2>/dev/null | wc -l | tr -d ' ')
+# Use find instead of ls glob to avoid errors when no archives exist
+ARCHIVE_COUNT=$(find "$ARCHIVE_DIR" -maxdepth 1 -name "*.tar.gz" -type f 2>/dev/null | wc -l | tr -d ' ')
 if [ "$ARCHIVE_COUNT" -gt 20 ]; then
     echo "Managing archive retention..."
-    ls -1t "$ARCHIVE_DIR"/*.tar.gz 2>/dev/null | tail -n +21 | xargs rm -f
+    # Use find with sort to get oldest files for removal
+    find "$ARCHIVE_DIR" -maxdepth 1 -name "*.tar.gz" -type f -print0 2>/dev/null | \
+        xargs -0 ls -1t 2>/dev/null | tail -n +21 | xargs rm -f 2>/dev/null || true
     REMOVED=$((ARCHIVE_COUNT - 20))
     echo "  Removed $REMOVED old archive(s)."
 fi

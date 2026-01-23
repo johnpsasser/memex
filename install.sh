@@ -40,6 +40,25 @@
 
 set -e
 
+# -----------------------------------------------------------------------------
+# Show usage if no arguments provided
+# -----------------------------------------------------------------------------
+if [ $# -eq 0 ]; then
+    echo "Usage: ./install.sh [options] <project_path>"
+    echo ""
+    echo "Options:"
+    echo "  -f, --force         Skip confirmation prompts"
+    echo "  -w, --worktree      Specify git worktree path (for docs/)"
+    echo "  --no-migration      Skip automatic documentation migration"
+    echo ""
+    echo "Examples:"
+    echo "  ./install.sh /path/to/project"
+    echo "  ./install.sh -f /path/to/project"
+    echo "  ./install.sh /config/path -w /worktree/path"
+    echo ""
+    exit 1
+fi
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -170,7 +189,6 @@ if [ "$NO_MIGRATION" -eq 0 ]; then
 
     MIGRATION_COUNT=0
     DUPLICATE_COUNT=0
-    declare -a MIGRATED_FILES=()
 
     # Create hash tracking file
     HASH_FILE="$WORKTREE/docs/archive/.content-hashes"
@@ -241,7 +259,6 @@ if [ "$NO_MIGRATION" -eq 0 ]; then
             TARGET_PATH="$TARGET_DIR/$FILENAME"
             if [ ! -f "$TARGET_PATH" ]; then
                 cp "$md_file" "$TARGET_PATH"
-                MIGRATED_FILES+=("$FILENAME")
                 echo -e "  ${GREEN}+${NC} $FILENAME -> $(basename "$TARGET_DIR")/"
             else
                 echo -e "  ${YELLOW}~${NC} $FILENAME (target exists, archived only)"
@@ -272,15 +289,18 @@ fi
 echo "Installing hooks..."
 
 # Copy each hook and update PROJECT_ROOT
+# Escape special characters for sed replacement (& and \ have special meaning)
+PROJECT_ROOT_ESCAPED=$(printf '%s\n' "$PROJECT_ROOT" | sed 's/[&\\/]/\\&/g')
+
 for hook in session-start.sh session-end.sh context-enricher.sh validate-docs.sh scan-docs.sh; do
     if [ -f "$SCRIPT_DIR/.claude/hooks/$hook" ]; then
         cp "$SCRIPT_DIR/.claude/hooks/$hook" "$PROJECT_ROOT/.claude/hooks/$hook"
 
         # Update PROJECT_ROOT variable in the hook
         if [[ "$OSTYPE" == "darwin"* ]]; then
-            sed -i '' "s|^PROJECT_ROOT=.*|PROJECT_ROOT=\"$PROJECT_ROOT\"|" "$PROJECT_ROOT/.claude/hooks/$hook"
+            sed -i '' "s|^PROJECT_ROOT=.*|PROJECT_ROOT=\"$PROJECT_ROOT_ESCAPED\"|" "$PROJECT_ROOT/.claude/hooks/$hook"
         else
-            sed -i "s|^PROJECT_ROOT=.*|PROJECT_ROOT=\"$PROJECT_ROOT\"|" "$PROJECT_ROOT/.claude/hooks/$hook"
+            sed -i "s|^PROJECT_ROOT=.*|PROJECT_ROOT=\"$PROJECT_ROOT_ESCAPED\"|" "$PROJECT_ROOT/.claude/hooks/$hook"
         fi
 
         chmod +x "$PROJECT_ROOT/.claude/hooks/$hook"
